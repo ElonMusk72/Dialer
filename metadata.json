@@ -1,0 +1,6 @@
+{
+  "name": "Dialer",
+  "description": "A premium, dark-themed Android dialer application with T9 search, call logs, speed dial favorites, and contacts management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

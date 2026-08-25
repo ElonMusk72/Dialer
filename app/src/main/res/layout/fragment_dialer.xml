@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/navy_background"
+    android:padding="16dp">
+
+    <!-- Top Display Section: Dialed Number & Caller Name -->
+    <LinearLayout
+        android:id="@+id/displayContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingVertical="12dp"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:id="@+id/tvMatchedContactName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/accent_green"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            tools:text="Alex Rivera"
+            tools:visibility="visible" />
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/tvDialedNumber"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerHorizontal="true"
+                android:ellipsize="start"
+                android:hint="Type a number..."
+                android:maxLines="1"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_tertiary"
+                android:textSize="32sp"
+                android:textStyle="bold"
+                tools:text="(555) 234-5678" />
+
+            <ImageButton
+                android:id="@+id/btnDisplayBackspace"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_delete"
+                android:padding="8dp"
+                android:src="@drawable/ic_backspace"
+                android:visibility="gone"
+                app:tint="@color/text_secondary"
+                tools:visibility="visible" />
+        </RelativeLayout>
+    </LinearLayout>
+
+    <!-- Suggestions List -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvSuggestions"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginVertical="8dp"
+        android:clipToPadding="false"
+        app:layout_constraintBottom_toTopOf="@id/keypadGrid"
+        app:layout_constraintTop_toBottomOf="@id/displayContainer"
+        tools:listitem="@layout/item_suggestion" />
+
+    <!-- 3x4 Keypad Grid -->
+    <GridLayout
+        android:id="@+id/keypadGrid"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        android:columnCount="3"
+        android:rowCount="4"
+        app:layout_constraintBottom_toTopOf="@id/bottomActionRow">
+
+        <!-- Key 1 -->
+        <LinearLayout
+            android:id="@+id/key1"
+            style="@style/DialpadKeyStyle"
+            android:contentDescription="1">
+            <TextView style="@style/DialpadDigitStyle" android:text="1" />
+            <TextView style="@style/DialpadLettersStyle" android:text=" " />
+        </LinearLayout>
+
+        <!-- Key 2 -->
+        <LinearLayout
+            android:id="@+id/key2"
+            style="@style/DialpadKeyStyle"
+            android:contentDescription="2 ABC">
+            <TextView style="@style/DialpadDigitStyle" android:text="2" />
+            <TextView style="@style/DialpadLettersStyle" android:text="ABC" />
+        </LinearLayout>
+
+        <!-- Key 3 -->
+        <LinearLayout
+            android:id="@+id/key3"
+            style="@style/DialpadKeyStyle"
+            android:contentDescription="3 DEF">
+            <TextView style="@style/DialpadDigitStyle" android:text="3" />
+            <TextView style="@style/DialpadLettersStyle" android:text="DEF" />
+        </LinearLayout>
+
+        <!-- Key 4 -->
+        <LinearLayout
+            android:id="@+id/key4"
+            style="@style/DialpadKeyStyle"
+            android:contentDescription="4 GHI">
+            <TextView style="@style/DialpadDigitStyle" android:text="4" />
+            <TextView style="@style/DialpadLettersStyle" android:text="GHI" />
+        </LinearLayout>
+
+        <!-- Key 5 -->
+        <LinearLayout
+            android:id="@+id/key5"
+            style="@style/DialpadKeyStyle"
+            android:contentDescription="5 JKL">
+            <TextView style="@style/DialpadDigitStyle" android:text="5" />
+            <TextView style="@style/DialpadLettersStyle" android:text="JKL" />
+        </LinearLayout>
+
+        <!-- Key 6 -->
+        <LinearLayout
+            android:id="@+id/key6"
+            style="@style/DialpadKeyStyle"
+            android:contentDescription="6 MNO">
+            <TextView style="@style/DialpadDigitStyle" android:text="6" />
+            <TextView style="@style/DialpadLettersStyle" android:text="MNO" />
+        </LinearLayout>
+
+        <!-- Key 7 -->
+        <LinearLayout
+            android:id="@+id/key7"
+            style="@style/DialpadKeyStyle"
+            android:contentDescription="7 PQRS">
+            <TextView style="@style/DialpadDigitStyle" android:text="7" />
+            <TextView style="@style/DialpadLettersStyle" android:text="PQRS" />
+        </LinearLayout>
+
+        <!-- Key 8 -->
+        <LinearLayout
+            android:id="@+id/key8"
+            style="@style/DialpadKeyStyle"
+            android:contentDescription="8 TUV">
+            <TextView style="@style/DialpadDigitStyle" android:text="8" />
+            <TextView style="@style/DialpadLettersStyle" android:text="TUV" />
+        </LinearLayout>
+
+        <!-- Key 9 -->
+        <LinearLayout
+            android:id="@+id/key9"
+            style="@style/DialpadKeyStyle"
+            android:contentDescription="9 WXYZ">
+            <TextView style="@style/DialpadDigitStyle" android:text="9" />
+            <TextView style="@style/DialpadLettersStyle" android:text="WXYZ" />
+        </LinearLayout>
+
+        <!-- Key Star -->
+        <LinearLayout
+            android:id="@+id/keyStar"
+            style="@style/DialpadKeyStyle"
+            android:contentDescription="Star">
+            <TextView style="@style/DialpadDigitStyle" android:text="*" />
+            <TextView style="@style/DialpadLettersStyle" android:text=" " />
+        </LinearLayout>
+
+        <!-- Key 0 -->
+        <LinearLayout
+            android:id="@+id/key0"
+            style="@style/DialpadKeyStyle"
+            android:contentDescription="0 plus">
+            <TextView style="@style/DialpadDigitStyle" android:text="0" />
+            <TextView style="@style/DialpadLettersStyle" android:text="+" />
+        </LinearLayout>
+
+        <!-- Key Hash -->
+        <LinearLayout
+            android:id="@+id/keyHash"
+            style="@style/DialpadKeyStyle"
+            android:contentDescription="Hash">
+            <TextView style="@style/DialpadDigitStyle" android:text="#" />
+            <TextView style="@style/DialpadLettersStyle" android:text=" " />
+        </LinearLayout>
+
+    </GridLayout>
+
+    <!-- Bottom Action Row: Add Contact, Call, Delete/Backspace -->
+    <RelativeLayout
+        android:id="@+id/bottomActionRow"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnAddContact"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="24dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/action_add_contact"
+            android:padding="10dp"
+            android:src="@drawable/ic_add_contact"
+            app:tint="@color/text_secondary" />
+
+        <ImageButton
+            android:id="@+id/btnCall"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_centerInParent="true"
+            android:background="@drawable/bg_call_button"
+            android:contentDescription="@string/action_call"
+            android:padding="16dp"
+            android:src="@drawable/ic_call"
+            app:tint="@color/white" />
+
+        <ImageButton
+            android:id="@+id/btnBackspace"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:layout_marginEnd="24dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/action_delete"
+            android:padding="10dp"
+            android:src="@drawable/ic_backspace"
+            app:tint="@color/text_secondary" />
+    </RelativeLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

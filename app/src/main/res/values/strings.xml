@@ -1,0 +1,34 @@
+<resources>
+    <string name="app_name">Dialer</string>
+    <string name="tab_keypad">Keypad</string>
+    <string name="tab_recents">Recents</string>
+    <string name="tab_contacts">Contacts</string>
+    <string name="tab_favorites">Favorites</string>
+
+    <string name="action_call">Call</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_add_contact">Add Contact</string>
+    <string name="action_search">Search contacts...</string>
+    <string name="action_clear_log">Clear Call Log</string>
+
+    <string name="type_incoming">Incoming Call</string>
+    <string name="type_outgoing">Outgoing Call</string>
+    <string name="type_missed">Missed Call</string>
+
+    <string name="empty_recents">No recent calls</string>
+    <string name="empty_recents_sub">Your call history will appear here.</string>
+    <string name="empty_contacts">No contacts found</string>
+    <string name="empty_contacts_sub">Type or search to view matching contacts.</string>
+    <string name="empty_favorites">No speed dial contacts</string>
+    <string name="empty_favorites_sub">Long press any contact to add them to speed dial.</string>
+
+    <string name="permission_call_required">Phone call permission is required to place direct calls.</string>
+    <string name="permission_contacts_required">Contacts permission is required to suggest contacts.</string>
+    <string name="permission_call_log_required">Call log permission is required to read call history.</string>
+    <string name="in_call_simulated">Call in progress: %s</string>
+    <string name="mute">Mute</string>
+    <string name="unmute">Unmute</string>
+    <string name="speaker">Speaker</string>
+    <string name="speaker_off">Speaker Off</string>
+    <string name="end_call">End Call</string>
+</resources>
