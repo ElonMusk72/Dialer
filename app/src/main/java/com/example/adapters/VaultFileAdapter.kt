@@ -99,6 +99,11 @@ class VaultFileAdapter(
                 onItemClick(file)
             }
 
+            binding.root.setOnLongClickListener {
+                onDeleteClick(file)
+                true
+            }
+
             binding.btnMoreOptions.setOnClickListener { view ->
                 showPopupMenu(view, file)
             }

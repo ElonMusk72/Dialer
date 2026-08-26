@@ -62,6 +62,25 @@
             android:label="Secret Vault"
             android:windowSoftInputMode="adjustPan" />
 
+        <activity
+            android:name=".PhotoViewerActivity"
+            android:exported="false"
+            android:label="Photo Viewer"
+            android:theme="@style/Theme.Dialer" />
+
+        <activity
+            android:name=".VideoPlayerActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
+            android:exported="false"
+            android:label="Video Player"
+            android:theme="@style/Theme.Dialer" />
+
+        <activity
+            android:name=".AudioPlayerActivity"
+            android:exported="false"
+            android:label="Audio Player"
+            android:theme="@style/Theme.Dialer" />
+
         <!-- FileProvider for viewing/sharing hidden vault files -->
         <provider
             android:name="androidx.core.content.FileProvider"

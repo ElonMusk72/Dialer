@@ -21,4 +21,11 @@
     <color name="divider_color">#2C3B4E</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Theme aliases for dialer and vault UI -->
+    <color name="dialer_primary">#4CAF50</color>
+    <color name="dialer_surface">#0D1520</color>
+    <color name="dialer_card">#1A2332</color>
+    <color name="dialer_text_primary">#FFFFFF</color>
+    <color name="dialer_text_secondary">#90A4AE</color>
 </resources>
