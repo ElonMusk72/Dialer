@@ -71,10 +71,10 @@ object SafeFolderManager {
     }
 
     /**
-     * Hides a file by:
-     * 1. Copying the file content to context.filesDir/SafeFolder/<subDir>
-     * 2. Deleting the original file from external storage / origin
-     * 3. Removing the entry from MediaStore so it disappears from gallery immediately
+     * Hides a file:
+     * 1. Copies file to app's private folder (context.filesDir/SafeFolder/...)
+     * 2. Deletes the original file from device storage
+     * 3. Removes the file's entry from MediaStore so it disappears from gallery
      */
     suspend fun hideFile(context: Context, sourceUri: Uri, fileType: String): VaultFileEntity? =
         withContext(Dispatchers.IO) {
@@ -109,8 +109,51 @@ object SafeFolderManager {
 
                 val realSourcePath = queryRealPath(context, sourceUri)
 
-                // Delete original file from original location
-                deleteOriginalSourceFile(context, sourceUri, realSourcePath)
+                // 1. Delete original physical file
+                if (!realSourcePath.isNullOrEmpty()) {
+                    try {
+                        val originFile = File(realSourcePath)
+                        if (originFile.exists()) {
+                            originFile.delete()
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error deleting physical file at $realSourcePath", e)
+                    }
+                }
+
+                // 2. Try DocumentsContract deletion
+                try {
+                    if (DocumentsContract.isDocumentUri(context, sourceUri)) {
+                        DocumentsContract.deleteDocument(contentResolver, sourceUri)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "DocumentsContract.deleteDocument failed for $sourceUri", e)
+                }
+
+                // 3. Delete direct ContentResolver URI
+                try {
+                    contentResolver.delete(sourceUri, null, null)
+                } catch (e: Exception) {
+                    Log.w(TAG, "ContentResolver direct delete failed for $sourceUri", e)
+                }
+
+                // 4. Remove the file's entry from MediaStore
+                if (!realSourcePath.isNullOrEmpty()) {
+                    removeFileFromMediaStore(context, realSourcePath)
+
+                    // 5. Trigger MediaScanner to instantly refresh device gallery
+                    try {
+                        MediaScannerConnection.scanFile(
+                            context,
+                            arrayOf(realSourcePath),
+                            null
+                        ) { path, uri ->
+                            Log.d(TAG, "MediaScanner refreshed for $path (uri=$uri)")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error triggering MediaScanner for $realSourcePath", e)
+                    }
+                }
 
                 val vaultFile = VaultFileEntity(
                     fileName = rawFileName,
@@ -131,79 +174,41 @@ object SafeFolderManager {
         }
 
     /**
-     * Deletes the original file and purges its record from MediaStore
+     * Removes the file entry from MediaStore so it no longer appears in phone's gallery
      */
-    private fun deleteOriginalSourceFile(context: Context, sourceUri: Uri, realSourcePath: String?) {
-        val contentResolver = context.contentResolver
-
-        // 1. Direct file deletion if real file path exists
-        if (!realSourcePath.isNullOrEmpty()) {
-            try {
-                val originFile = File(realSourcePath)
-                if (originFile.exists()) {
-                    originFile.delete()
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Error deleting physical file at $realSourcePath", e)
-            }
-        }
-
-        // 2. Try DocumentsContract deletion
+    fun removeFileFromMediaStore(context: Context, filePath: String): Boolean {
+        var isRemoved = false
         try {
-            if (DocumentsContract.isDocumentUri(context, sourceUri)) {
-                DocumentsContract.deleteDocument(contentResolver, sourceUri)
+            val contentResolver = context.contentResolver
+            val uri = MediaStore.Files.getContentUri("external")
+            val selection = MediaStore.MediaColumns.DATA + " = ?"
+            val selectionArgs = arrayOf(filePath)
+            val deletedRows = contentResolver.delete(uri, selection, selectionArgs)
+            if (deletedRows > 0) {
+                isRemoved = true
+                Log.d(TAG, "Removed $deletedRows rows from MediaStore.Files for $filePath")
             }
         } catch (e: Exception) {
-            Log.w(TAG, "DocumentsContract.deleteDocument failed for $sourceUri", e)
+            Log.w(TAG, "Failed to delete from MediaStore.Files for path: $filePath", e)
         }
 
-        // 3. ContentResolver direct URI delete
+        // Also query and remove from Images, Video, Audio MediaStore tables
         try {
-            contentResolver.delete(sourceUri, null, null)
+            val contentResolver = context.contentResolver
+            val selection = "${MediaStore.MediaColumns.DATA} = ?"
+            val selectionArgs = arrayOf(filePath)
+            val imagesDeleted = contentResolver.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, selection, selectionArgs)
+            val videoDeleted = contentResolver.delete(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, selection, selectionArgs)
+            val audioDeleted = contentResolver.delete(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, selection, selectionArgs)
+
+            if (imagesDeleted > 0 || videoDeleted > 0 || audioDeleted > 0) {
+                isRemoved = true
+            }
         } catch (e: Exception) {
-            Log.w(TAG, "ContentResolver delete failed for $sourceUri", e)
+            Log.w(TAG, "Failed to delete from specific MediaStore tables for $filePath", e)
         }
 
-        // 4. Remove from MediaStore tables using real path or name
-        if (!realSourcePath.isNullOrEmpty()) {
-            try {
-                contentResolver.delete(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    "${MediaStore.Images.Media.DATA} = ?",
-                    arrayOf(realSourcePath)
-                )
-                contentResolver.delete(
-                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                    "${MediaStore.Video.Media.DATA} = ?",
-                    arrayOf(realSourcePath)
-                )
-                contentResolver.delete(
-                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                    "${MediaStore.Audio.Media.DATA} = ?",
-                    arrayOf(realSourcePath)
-                )
-                contentResolver.delete(
-                    MediaStore.Files.getContentUri("external"),
-                    "${MediaStore.Files.FileColumns.DATA} = ?",
-                    arrayOf(realSourcePath)
-                )
-            } catch (e: Exception) {
-                Log.w(TAG, "Error purging MediaStore rows for $realSourcePath", e)
-            }
-
-            // 5. Notify MediaScanner to refresh gallery index
-            try {
-                MediaScannerConnection.scanFile(
-                    context,
-                    arrayOf(realSourcePath),
-                    null
-                ) { _, _ ->
-                    Log.d(TAG, "MediaScanner refreshed for $realSourcePath")
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Error triggering MediaScanner for $realSourcePath", e)
-            }
-        }
+        return isRemoved
     }
 
     suspend fun deleteVaultFile(context: Context, vaultFile: VaultFileEntity): Boolean =
@@ -335,25 +340,73 @@ object SafeFolderManager {
         return uri.path?.substringAfterLast('/')
     }
 
-    private fun queryRealPath(context: Context, uri: Uri): String? {
-        if (uri.scheme == "file") {
-            return uri.path
-        }
-        if (uri.scheme == "content") {
-            val projection = arrayOf(MediaStore.MediaColumns.DATA)
-            try {
-                context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        val colIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATA)
-                        val path = cursor.getString(colIndex)
-                        if (!path.isNullOrEmpty()) return path
-                    }
+    fun queryRealPath(context: Context, uri: Uri): String? {
+        // DocumentProvider handling
+        if (DocumentsContract.isDocumentUri(context, uri)) {
+            val docId = DocumentsContract.getDocumentId(uri)
+            val authority = uri.authority
+
+            if ("com.android.externalstorage.documents" == authority) {
+                val split = docId.split(":")
+                val type = split[0]
+                if ("primary".equals(type, ignoreCase = true)) {
+                    return "${Environment.getExternalStorageDirectory()}/${if (split.size > 1) split[1] else ""}"
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not query real path from uri: $uri", e)
+            } else if ("com.android.providers.media.documents" == authority) {
+                val split = docId.split(":")
+                val type = split[0]
+                val id = if (split.size > 1) split[1] else return null
+                val contentUri = when (type) {
+                    "image" -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                    "video" -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                    "audio" -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                    else -> MediaStore.Files.getContentUri("external")
+                }
+                val selection = "_id=?"
+                val selectionArgs = arrayOf(id)
+                return getDataColumn(context, contentUri, selection, selectionArgs)
+            } else if ("com.android.providers.downloads.documents" == authority) {
+                val contentUri = ContentUris.withAppendedId(
+                    Uri.parse("content://downloads/public_downloads"),
+                    docId.toLongOrNull() ?: return null
+                )
+                return getDataColumn(context, contentUri, null, null)
             }
         }
+
+        // Direct content scheme
+        if ("content".equals(uri.scheme, ignoreCase = true)) {
+            val path = getDataColumn(context, uri, null, null)
+            if (!path.isNullOrEmpty()) return path
+        }
+
+        // Direct file scheme
+        if ("file".equals(uri.scheme, ignoreCase = true)) {
+            return uri.path
+        }
+
         return uri.path
+    }
+
+    private fun getDataColumn(
+        context: Context,
+        uri: Uri,
+        selection: String?,
+        selectionArgs: Array<String>?
+    ): String? {
+        val column = MediaStore.MediaColumns.DATA
+        val projection = arrayOf(column)
+        try {
+            context.contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val columnIndex = cursor.getColumnIndexOrThrow(column)
+                    return cursor.getString(columnIndex)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "getDataColumn failed for $uri", e)
+        }
+        return null
     }
 
     private fun getMimeTypeFromExtension(fileName: String): String {
