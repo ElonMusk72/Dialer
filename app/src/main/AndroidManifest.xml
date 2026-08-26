@@ -62,6 +62,17 @@
             android:label="Secret Vault"
             android:windowSoftInputMode="adjustPan" />
 
+        <!-- FileProvider for viewing/sharing hidden vault files -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Telecom InCallService for handling calls in-app without redirection -->
         <service
             android:name=".service.CallService"

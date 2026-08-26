@@ -17,6 +17,7 @@ import com.example.data.CallLogEntity
 import com.example.data.ContactItem
 import com.example.databinding.FragmentDialerBinding
 import com.example.utils.DialerUtils
+import com.example.utils.StoragePermissionUtils
 import com.example.utils.VaultUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -135,6 +136,13 @@ class DialerFragment : Fragment() {
                 if (savedPin != null && number == savedPin) {
                     dialedDigits.clear()
                     updateDialDisplay()
+
+                    // Check if All Files Access is granted before showing the vault
+                    if (!StoragePermissionUtils.isAllFilesAccessGranted(requireContext())) {
+                        StoragePermissionUtils.showAllFilesAccessDialog(requireActivity())
+                        return@setOnClickListener
+                    }
+
                     val intent = Intent(requireContext(), com.example.VaultActivity::class.java)
                     startActivity(intent)
                     return@setOnClickListener

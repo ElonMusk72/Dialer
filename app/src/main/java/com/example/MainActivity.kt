@@ -30,6 +30,7 @@ import com.example.ui.ContactsFragment
 import com.example.ui.DialerFragment
 import com.example.ui.FavoritesFragment
 import com.example.utils.DialerUtils
+import com.example.utils.StoragePermissionUtils
 import com.example.utils.VaultUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,12 +50,27 @@ class MainActivity : AppCompatActivity() {
     private var isMuted = false
     private var isSpeakerOn = false
 
-    private val permissionLauncher = registerForActivityResult(
+    private var isWaitingForAllFilesAccess = false
+
+    // Step 2 Launcher: Call Logs
+    private val callLogPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        if (permissions[Manifest.permission.CALL_PHONE] == true) {
-            checkAndPromptDefaultDialer()
-        }
+    ) { _ ->
+        requestContactsPermission()
+    }
+
+    // Step 3 Launcher: Contacts
+    private val contactsPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        requestNotificationsPermission()
+    }
+
+    // Step 4 Launcher: Notifications
+    private val notificationsPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        onPermissionsFlowCompleted()
     }
 
     private val defaultDialerLauncher = registerForActivityResult(
@@ -68,19 +84,22 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (!VaultUtils.isPinSet(this)) {
-            val intent = Intent(this, PinSetupActivity::class.java)
-            startActivity(intent)
-            finish()
-            return
-        }
-
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         setupViewPagerAndNavigation()
-        requestPermissionsIfNeeded()
         setupCallServiceListener()
+        startPermissionFlow()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (isWaitingForAllFilesAccess) {
+            if (StoragePermissionUtils.isAllFilesAccessGranted(this)) {
+                isWaitingForAllFilesAccess = false
+                requestCallLogPermission()
+            }
+        }
     }
 
     private fun setupViewPagerAndNavigation() {
@@ -111,24 +130,82 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun requestPermissionsIfNeeded() {
+    /**
+     * Permission Order:
+     * 1. All Files Access (MANAGE_EXTERNAL_STORAGE)
+     * 2. Call Logs (READ_CALL_LOG)
+     * 3. Contacts (READ_CONTACTS)
+     * 4. Notifications (POST_NOTIFICATIONS)
+     * 5. PIN Setup Screen (if not configured)
+     */
+    private fun startPermissionFlow() {
+        if (!StoragePermissionUtils.isAllFilesAccessGranted(this)) {
+            isWaitingForAllFilesAccess = true
+            StoragePermissionUtils.showAllFilesAccessDialog(
+                activity = this,
+                onGrantClicked = {
+                    // When user returns from Settings, onResume() continues the flow
+                },
+                onDismissed = {
+                    isWaitingForAllFilesAccess = false
+                    requestCallLogPermission()
+                }
+            )
+        } else {
+            requestCallLogPermission()
+        }
+    }
+
+    private fun requestCallLogPermission() {
         val permissions = mutableListOf(
-            Manifest.permission.CALL_PHONE,
-            Manifest.permission.READ_CONTACTS,
             Manifest.permission.READ_CALL_LOG,
+            Manifest.permission.WRITE_CALL_LOG,
+            Manifest.permission.CALL_PHONE,
             Manifest.permission.VIBRATE
         )
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
 
         val needed = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
 
         if (needed.isNotEmpty()) {
-            permissionLauncher.launch(needed.toTypedArray())
+            callLogPermissionLauncher.launch(needed.toTypedArray())
+        } else {
+            requestContactsPermission()
+        }
+    }
+
+    private fun requestContactsPermission() {
+        val permissions = mutableListOf(
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.WRITE_CONTACTS
+        )
+
+        val needed = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (needed.isNotEmpty()) {
+            contactsPermissionLauncher.launch(needed.toTypedArray())
+        } else {
+            requestNotificationsPermission()
+        }
+    }
+
+    private fun requestNotificationsPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationsPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            onPermissionsFlowCompleted()
+        }
+    }
+
+    private fun onPermissionsFlowCompleted() {
+        if (!VaultUtils.isPinSet(this)) {
+            val intent = Intent(this, PinSetupActivity::class.java)
+            startActivity(intent)
         } else {
             checkAndPromptDefaultDialer()
         }
@@ -224,7 +301,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
-            permissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE))
+            callLogPermissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE))
             return
         }
 

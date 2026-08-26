@@ -71,27 +71,29 @@ object StoragePermissionUtils {
 
     /**
      * Shows an informative explanation dialog before redirecting to grant permission.
+     * Title: "📁 All Files Access Needed"
+     * Message: "This app needs All Files Access to hide and protect your files, photos, and videos in the vault."
+     * Button: "Grant Access" → opens Settings
      */
     fun showAllFilesAccessDialog(
         activity: Activity,
-        onGranted: (() -> Unit)? = null
+        onGrantClicked: (() -> Unit)? = null,
+        onDismissed: (() -> Unit)? = null
     ) {
-        val message = "This app needs All Files Access to:\n" +
-                "  • Hide and protect your files\n" +
-                "  • Backup your files\n" +
-                "  • Scan and organize your files"
+        val message = "This app needs All Files Access to hide and protect your files, photos, and videos in the vault."
 
         AlertDialog.Builder(activity)
             .setTitle("📁 All Files Access Needed")
             .setMessage(message)
-            .setCancelable(true)
+            .setCancelable(false)
             .setPositiveButton("Grant Access") { dialog, _ ->
                 dialog.dismiss()
                 requestAllFilesAccess(activity)
-                onGranted?.invoke()
+                onGrantClicked?.invoke()
             }
             .setNegativeButton("Cancel") { dialog, _ ->
                 dialog.dismiss()
+                onDismissed?.invoke()
             }
             .show()
     }
