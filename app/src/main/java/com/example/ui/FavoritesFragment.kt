@@ -101,29 +101,7 @@ class FavoritesFragment : Fragment() {
 
     private fun placeCall(phoneNumber: String, name: String?) {
         val activity = activity as? MainActivity ?: return
-
-        val callLog = CallLogEntity(
-            phoneNumber = phoneNumber,
-            callerName = name,
-            callType = "OUTGOING",
-            timestamp = System.currentTimeMillis(),
-            durationSeconds = (5..120).random().toLong()
-        )
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            activity.database.callLogDao().insertCallLog(callLog)
-        }
-
-        if (DialerUtils.hasCallPermission(requireContext())) {
-            try {
-                val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$phoneNumber"))
-                startActivity(intent)
-            } catch (e: Exception) {
-                activity.showInCallDialog(phoneNumber, name)
-            }
-        } else {
-            activity.showInCallDialog(phoneNumber, name)
-        }
+        activity.makeCall(phoneNumber, name)
     }
 
     override fun onResume() {

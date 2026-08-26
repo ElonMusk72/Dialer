@@ -17,6 +17,7 @@ import com.example.data.CallLogEntity
 import com.example.data.ContactItem
 import com.example.databinding.FragmentDialerBinding
 import com.example.utils.DialerUtils
+import com.example.utils.VaultUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -130,6 +131,14 @@ class DialerFragment : Fragment() {
             DialerUtils.performHapticFeedback(it)
             val number = dialedDigits.toString()
             if (number.isNotBlank()) {
+                val savedPin = VaultUtils.getPin(requireContext())
+                if (savedPin != null && number == savedPin) {
+                    dialedDigits.clear()
+                    updateDialDisplay()
+                    val intent = Intent(requireContext(), com.example.VaultActivity::class.java)
+                    startActivity(intent)
+                    return@setOnClickListener
+                }
                 val matchedName = findMatchedContactName(number)
                 placeCall(number, matchedName)
             } else {
@@ -211,32 +220,7 @@ class DialerFragment : Fragment() {
 
     private fun placeCall(phoneNumber: String, name: String?) {
         val activity = activity as? MainActivity ?: return
-
-        // Save call log in Room database
-        val callLog = CallLogEntity(
-            phoneNumber = phoneNumber,
-            callerName = name,
-            callType = "OUTGOING",
-            timestamp = System.currentTimeMillis(),
-            durationSeconds = (5..120).random().toLong()
-        )
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            activity.database.callLogDao().insertCallLog(callLog)
-        }
-
-        // Trigger real action call intent if permission granted, or simulate in-call dialog
-        if (DialerUtils.hasCallPermission(requireContext())) {
-            try {
-                val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$phoneNumber"))
-                startActivity(intent)
-            } catch (e: Exception) {
-                activity.showInCallDialog(phoneNumber, name)
-            }
-        } else {
-            // Offer direct simulated call experience or request permission
-            activity.showInCallDialog(phoneNumber, name)
-        }
+        activity.makeCall(phoneNumber, name)
     }
 
     override fun onDestroyView() {
