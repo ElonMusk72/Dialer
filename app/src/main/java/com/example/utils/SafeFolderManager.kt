@@ -59,15 +59,23 @@ object SafeFolderManager {
         return folder
     }
 
-    private fun createNoMediaFile(folder: File) {
+    fun createNoMediaFile(folderPath: String) {
         try {
-            val noMedia = File(folder, ".nomedia")
-            if (!noMedia.exists()) {
-                noMedia.createNewFile()
+            val folder = File(folderPath)
+            if (!folder.exists()) {
+                folder.mkdirs()
+            }
+            val noMediaFile = File(folder, ".nomedia")
+            if (!noMediaFile.exists()) {
+                noMediaFile.createNewFile()
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Could not create .nomedia file in $folder", e)
+            Log.w(TAG, "Could not create .nomedia file in $folderPath", e)
         }
+    }
+
+    fun createNoMediaFile(folder: File) {
+        createNoMediaFile(folder.absolutePath)
     }
 
     /**
