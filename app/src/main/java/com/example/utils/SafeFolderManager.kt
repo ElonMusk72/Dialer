@@ -77,12 +77,6 @@ object SafeFolderManager {
         createNoMediaFile(folder.absolutePath)
     }
 
-    /**
-     * Hides a file:
-     * 1. Copies file to app's private folder (context.filesDir/SafeFolder/...)
-     * 2. Deletes the original file from device storage
-     * 3. Removes the file's entry from MediaStore so it disappears from gallery
-     */
     suspend fun hideFile(context: Context, sourceUri: Uri, fileType: String): VaultFileEntity? =
         withContext(Dispatchers.IO) {
             try {
@@ -114,9 +108,9 @@ object SafeFolderManager {
                     }
                 }
 
-                var realSourcePath = queryRealPath(context, sourceUri)
+                var realSourcePath: String? = queryRealPath(context, sourceUri)
 
-                // FIX 1: Fallback to find physical path if queryRealPath returns null (common on Android 10+)
+                // FIX 1: Fallback to find physical path if queryRealPath returns null
                 if (realSourcePath.isNullOrEmpty()) {
                     try {
                         var fileName = ""
@@ -179,15 +173,17 @@ object SafeFolderManager {
                 }
 
                 // 3. Delete original physical file (Works if MANAGE_EXTERNAL_STORAGE is granted)
-                if (!deletedSuccessfully && !realSourcePath.isNullOrEmpty()) {
-                    try {
-                        val originFile = File(realSourcePath)
-                        if (originFile.exists()) {
-                            originFile.delete()
-                            deletedSuccessfully = true
+                if (!deletedSuccessfully) {
+                    realSourcePath?.let { path ->
+                        try {
+                            val originFile = File(path)
+                            if (originFile.exists()) {
+                                originFile.delete()
+                                deletedSuccessfully = true
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Error deleting physical file at $path", e)
                         }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Error deleting physical file at $realSourcePath", e)
                     }
                 }
 
@@ -224,19 +220,23 @@ object SafeFolderManager {
                             }
                         }
 
-                        if (mediaUri != null) {
-                            val deleted = contentResolver.delete(mediaUri, null, null)
-                            if (deleted > 0) deletedSuccessfully = true
+                        mediaUri?.let { uri ->
+                            try {
+                                val deleted = contentResolver.delete(uri, null, null)
+                                if (deleted > 0) deletedSuccessfully = true
+                            } catch (e: Exception) {
+                                Log.w(TAG, "MediaStore URI deletion failed", e)
+                            }
                         }
                     } catch (e: Exception) {
-                        Log.w(TAG, "MediaStore URI deletion failed", e)
+                        Log.w(TAG, "MediaStore URI deletion logic failed", e)
                     }
                 }
 
                 // 4. Remove the file's entry from MediaStore and Refresh Gallery Cache
-                if (!realSourcePath.isNullOrEmpty()) {
-                    hideFileFromGallery(context, realSourcePath)
-                    refreshGallery(context, realSourcePath)
+                realSourcePath?.let { path ->
+                    hideFileFromGallery(context, path)
+                    refreshGallery(context, path)
                 }
 
                 val vaultFile = VaultFileEntity(
@@ -258,9 +258,6 @@ object SafeFolderManager {
             }
         }
 
-    /**
-     * Removes the file entry from MediaStore so it no longer appears in phone's gallery
-     */
     fun hideFileFromGallery(context: Context, filePath: String): Boolean {
         return try {
             val contentResolver = context.contentResolver
@@ -269,7 +266,6 @@ object SafeFolderManager {
             val selectionArgs = arrayOf(filePath)
             val deletedRows = contentResolver.delete(uri, selection, selectionArgs)
 
-            // Also remove from dedicated Images, Video, and Audio tables if present
             try {
                 contentResolver.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, selection, selectionArgs)
                 contentResolver.delete(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, selection, selectionArgs)
@@ -283,9 +279,6 @@ object SafeFolderManager {
         }
     }
 
-    /**
-     * Forces MediaScanner to rescan the file path so gallery updates immediately
-     */
     fun refreshGallery(context: Context, filePath: String) {
         try {
             val file = File(filePath)
@@ -296,7 +289,6 @@ object SafeFolderManager {
             Log.w(TAG, "sendBroadcast for ACTION_MEDIA_SCANNER_SCAN_FILE failed", e)
         }
 
-        // Also trigger MediaScannerConnection for Android 10+ devices
         try {
             MediaScannerConnection.scanFile(
                 context,
@@ -310,7 +302,6 @@ object SafeFolderManager {
         }
     }
 
-    // Alias for compatibility
     fun removeFileFromMediaStore(context: Context, filePath: String): Boolean =
         hideFileFromGallery(context, filePath)
 
@@ -344,9 +335,6 @@ object SafeFolderManager {
             }
         }
 
-    /**
-     * Opens the vault file INSIDE the app (In-App Player for Videos, In-App Viewer for Photos, etc.)
-     */
     fun openVaultFile(context: Context, vaultFile: VaultFileEntity) {
         try {
             val file = File(vaultFile.savedPath)
@@ -444,12 +432,11 @@ object SafeFolderManager {
     }
 
     fun queryRealPath(context: Context, uri: Uri): String? {
-        // DocumentProvider handling
         if (DocumentsContract.isDocumentUri(context, uri)) {
             val docId = DocumentsContract.getDocumentId(uri)
             val authority = uri.authority
 
-               if ("com.android.externalstorage.documents" == authority) {
+            if ("com.android.externalstorage.documents" == authority) {
                 val split = docId.split(":")
                 val type = split[0]
                 if ("primary".equals(type, ignoreCase = true)) {
@@ -459,7 +446,7 @@ object SafeFolderManager {
                 val split = docId.split(":")
                 val type = split[0]
                 val id = if (split.size > 1) split[1] else return null
-                val contentUri = when (type) {
+           val contentUri = when (type) {
                     "image" -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
                     "video" -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                     "audio" -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
@@ -477,13 +464,11 @@ object SafeFolderManager {
             }
         }
 
-        // Direct content scheme
         if ("content".equals(uri.scheme, ignoreCase = true)) {
             val path = getDataColumn(context, uri, null, null)
             if (!path.isNullOrEmpty()) return path
         }
 
-        // Direct file scheme
         if ("file".equals(uri.scheme, ignoreCase = true)) {
             return uri.path
         }
