@@ -139,20 +139,8 @@ object SafeFolderManager {
 
                 // 4. Remove the file's entry from MediaStore
                 if (!realSourcePath.isNullOrEmpty()) {
-                    removeFileFromMediaStore(context, realSourcePath)
-
-                    // 5. Trigger MediaScanner to instantly refresh device gallery
-                    try {
-                        MediaScannerConnection.scanFile(
-                            context,
-                            arrayOf(realSourcePath),
-                            null
-                        ) { path, uri ->
-                            Log.d(TAG, "MediaScanner refreshed for $path (uri=$uri)")
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Error triggering MediaScanner for $realSourcePath", e)
-                    }
+                    hideFileFromGallery(context, realSourcePath)
+                    refreshGallery(context, realSourcePath)
                 }
 
                 val vaultFile = VaultFileEntity(
@@ -176,40 +164,58 @@ object SafeFolderManager {
     /**
      * Removes the file entry from MediaStore so it no longer appears in phone's gallery
      */
-    fun removeFileFromMediaStore(context: Context, filePath: String): Boolean {
-        var isRemoved = false
-        try {
+    fun hideFileFromGallery(context: Context, filePath: String): Boolean {
+        return try {
             val contentResolver = context.contentResolver
             val uri = MediaStore.Files.getContentUri("external")
-            val selection = MediaStore.MediaColumns.DATA + " = ?"
-            val selectionArgs = arrayOf(filePath)
-            val deletedRows = contentResolver.delete(uri, selection, selectionArgs)
-            if (deletedRows > 0) {
-                isRemoved = true
-                Log.d(TAG, "Removed $deletedRows rows from MediaStore.Files for $filePath")
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to delete from MediaStore.Files for path: $filePath", e)
-        }
-
-        // Also query and remove from Images, Video, Audio MediaStore tables
-        try {
-            val contentResolver = context.contentResolver
             val selection = "${MediaStore.MediaColumns.DATA} = ?"
             val selectionArgs = arrayOf(filePath)
-            val imagesDeleted = contentResolver.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, selection, selectionArgs)
-            val videoDeleted = contentResolver.delete(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, selection, selectionArgs)
-            val audioDeleted = contentResolver.delete(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, selection, selectionArgs)
+            val deletedRows = contentResolver.delete(uri, selection, selectionArgs)
 
-            if (imagesDeleted > 0 || videoDeleted > 0 || audioDeleted > 0) {
-                isRemoved = true
-            }
+            // Also remove from dedicated Images, Video, and Audio tables if present
+            try {
+                contentResolver.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, selection, selectionArgs)
+                contentResolver.delete(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, selection, selectionArgs)
+                contentResolver.delete(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, selection, selectionArgs)
+            } catch (_: Exception) {}
+
+            deletedRows > 0
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to delete from specific MediaStore tables for $filePath", e)
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Forces MediaScanner to rescan the file path so gallery updates immediately
+     */
+    fun refreshGallery(context: Context, filePath: String) {
+        try {
+            val file = File(filePath)
+            val uri = Uri.fromFile(file)
+            val intent = Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, uri)
+            context.sendBroadcast(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "sendBroadcast for ACTION_MEDIA_SCANNER_SCAN_FILE failed", e)
         }
 
-        return isRemoved
+        // Also trigger MediaScannerConnection for Android 10+ devices
+        try {
+            MediaScannerConnection.scanFile(
+                context,
+                arrayOf(filePath),
+                null
+            ) { path, uri ->
+                Log.d(TAG, "MediaScanner refreshed for $path (uri=$uri)")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "MediaScannerConnection scanFile failed", e)
+        }
     }
+
+    // Alias for compatibility
+    fun removeFileFromMediaStore(context: Context, filePath: String): Boolean =
+        hideFileFromGallery(context, filePath)
 
     suspend fun deleteVaultFile(context: Context, vaultFile: VaultFileEntity): Boolean =
         withContext(Dispatchers.IO) {
