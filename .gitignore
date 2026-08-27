@@ -16,3 +16,7 @@
 local.properties
 .env
 debug.keystore
+
+# ===== SECURITY: NEVER COMMIT THESE =====
+google-services.json
+service-account-key.json
