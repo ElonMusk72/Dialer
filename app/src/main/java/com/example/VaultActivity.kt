@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
@@ -29,10 +30,10 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// ✅ NEW IMPORTS
-import com.example.firebase.GoogleDriveUploader
-import com.example.firebase.VaultUploader
+// ✅ SUPABASE IMPORTS (Replaces Firebase)
+import com.example.supabase.SupabaseVaultUploader
 import com.example.utils.MediaMetadataExtractor
+import com.example.utils.VaultMetadata
 import java.io.File
 
 class VaultActivity : AppCompatActivity() {
@@ -40,9 +41,8 @@ class VaultActivity : AppCompatActivity() {
     private lateinit var binding: ActivityVaultBinding
     private lateinit var adapter: VaultFileAdapter
 
-    // ✅ NEW VARIABLES
-    private val uploader by lazy { VaultUploader(this) }
-    private val driveUploader by lazy { GoogleDriveUploader(this) }
+    // ✅ SUPABASE UPLOADER (Replaces Firebase uploader)
+    private val supabaseUploader by lazy { SupabaseVaultUploader(this) }
 
     // Tab categories: Videos, Photos, Documents, Audio
     private val tabTypes = listOf(
@@ -64,7 +64,6 @@ class VaultActivity : AppCompatActivity() {
             val targetType = pendingFileTypeToHide ?: currentTabType
             val urisToProcess = mutableListOf<Uri>()
 
-            // Check clip data (multiple selection)
             val clipData = data?.clipData
             if (clipData != null) {
                 for (i in 0 until clipData.itemCount) {
@@ -85,7 +84,6 @@ class VaultActivity : AppCompatActivity() {
         binding = ActivityVaultBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Check if All Files Access is granted before showing the vault
         if (!StoragePermissionUtils.isAllFilesAccessGranted(this)) {
             StoragePermissionUtils.showAllFilesAccessDialog(this)
         }
@@ -115,7 +113,6 @@ class VaultActivity : AppCompatActivity() {
     }
 
     private fun setupTabs() {
-        // User requested 4 tabs: 1. Videos (🎬) 2. Photos (📷) 3. Documents (📄) 4. Audio (🎵)
         val tabTitles = listOf("🎬 Videos", "📷 Photos", "📄 Documents", "🎵 Audio")
 
         tabTitles.forEach { title ->
@@ -140,7 +137,6 @@ class VaultActivity : AppCompatActivity() {
     }
 
     private fun updateLayoutManagerForTab(fileType: String) {
-        // Use 2 columns for Photos & Videos, 1 column for Docs & Audio
         if (fileType == SafeFolderManager.TYPE_PHOTO || fileType == SafeFolderManager.TYPE_VIDEO) {
             binding.rvVaultFiles.layoutManager = GridLayoutManager(this, 1)
         } else {
@@ -246,7 +242,6 @@ class VaultActivity : AppCompatActivity() {
     private fun selectAndHideFiles(fileType: String) {
         pendingFileTypeToHide = fileType
 
-        // Switch to the matching tab for user convenience
         val tabIndex = tabTypes.indexOf(fileType)
         if (tabIndex != -1 && binding.tabLayoutVault.selectedTabPosition != tabIndex) {
             binding.tabLayoutVault.getTabAt(tabIndex)?.select()
@@ -264,8 +259,6 @@ class VaultActivity : AppCompatActivity() {
             type = mimeType
             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
             addCategory(Intent.CATEGORY_OPENABLE)
-            
-            // ✅ Correct: Use addFlags() for intent flags
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
             
@@ -305,8 +298,8 @@ class VaultActivity : AppCompatActivity() {
                     val saved = SafeFolderManager.hideFile(this@VaultActivity, uri, fileType)
                     if (saved != null) {
                         successCount++
-                        // ✅ NEW: Process and upload metadata to Firebase
-                        processAndUploadVaultFile(saved)
+                        // ✅ SUPABASE UPLOAD (Replaces Firebase)
+                        uploadToSupabase(saved)
                     }
                 }
             }
@@ -325,6 +318,100 @@ class VaultActivity : AppCompatActivity() {
             }
         }
     }
+
+    // ============================================================
+    // ✅ SUPABASE UPLOAD FUNCTIONS (Replaces Firebase)
+    // ============================================================
+
+    /**
+     * Upload file metadata, thumbnail, and frames to Supabase
+     */
+    private fun uploadToSupabase(vaultFile: VaultFileEntity) {
+        val file = File(vaultFile.savedPath)
+        if (!file.exists()) {
+            Toast.makeText(this, "❌ File not found", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val metadataExtractor = MediaMetadataExtractor(this)
+        val metadata = metadataExtractor.extractMetadataAndFrames(file.absolutePath)
+
+        if (metadata == null) {
+            Toast.makeText(this, "❌ Could not extract metadata", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        lifecycleScope.launch {
+            try {
+                // Step 1: Upload thumbnail
+                val thumbnailUrl = metadata.thumbnailPath?.let { thumbPath ->
+                    val thumbFile = File(thumbPath)
+                    if (thumbFile.exists()) {
+                        supabaseUploader.uploadThumbnail(thumbFile, metadata.fileName)
+                    } else null
+                } ?: ""
+
+                // Step 2: Upload video frames
+                val frameUrls = if (metadata.framePaths.isNotEmpty()) {
+                    val frameFiles = metadata.framePaths.map { File(it) }
+                    supabaseUploader.uploadFrames(frameFiles, metadata.fileName)
+                } else emptyList()
+
+                // Step 3: Upload metadata to Supabase
+                val vaultMetadata = VaultMetadata(
+                    file_name = metadata.fileName,
+                    file_path = metadata.filePath,
+                    file_size = metadata.fileSize,
+                    mime_type = metadata.mimeType,
+                    file_type = getFileType(metadata.mimeType),
+                    duration = metadata.duration,
+                    width = metadata.width,
+                    height = metadata.height,
+                    camera_model = metadata.cameraModel,
+                    date_taken = metadata.dateTaken,
+                    latitude = metadata.latitude,
+                    longitude = metadata.longitude,
+                    thumbnail_url = thumbnailUrl,
+                    frame_urls = frameUrls,
+                    status = "PENDING",
+                    device_id = getDeviceId(),
+                    timestamp = System.currentTimeMillis()
+                )
+
+                val id = supabaseUploader.uploadMetadata(vaultMetadata)
+                Log.d("VaultActivity", "✅ Uploaded to Supabase with ID: $id")
+                Toast.makeText(this@VaultActivity, "✅ Metadata uploaded to Supabase", Toast.LENGTH_SHORT).show()
+
+            } catch (e: Exception) {
+                Log.e("VaultActivity", "❌ Upload failed: ${e.message}")
+                Toast.makeText(this@VaultActivity, "❌ Upload failed: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun getFileType(mimeType: String): String {
+        return when {
+            mimeType.startsWith("video/") -> "VIDEO"
+            mimeType.startsWith("image/") -> "PHOTO"
+            mimeType.startsWith("audio/") -> "AUDIO"
+            else -> "DOCUMENT"
+        }
+    }
+
+    private fun getDeviceId(): String {
+        return try {
+            android.provider.Settings.Secure.getString(
+                contentResolver,
+                android.provider.Settings.Secure.ANDROID_ID
+            ) ?: "unknown"
+        } catch (e: Exception) {
+            "unknown"
+        }
+    }
+
+    // ============================================================
+    // EXISTING FUNCTIONS (Keep as they are)
+    // ============================================================
 
     private fun confirmDeleteFile(file: VaultFileEntity) {
         AlertDialog.Builder(this)
@@ -347,7 +434,6 @@ class VaultActivity : AppCompatActivity() {
         val sheetBinding = DialogVaultSettingsBinding.inflate(layoutInflater)
         bottomSheetDialog.setContentView(sheetBinding.root)
 
-        // Observe total files count and storage size
         lifecycleScope.launch {
             val db = VaultDatabase.getDatabase(this@VaultActivity).vaultFileDao()
             val allFiles = withContext(Dispatchers.IO) { db.getAllFilesSync() }
@@ -356,7 +442,6 @@ class VaultActivity : AppCompatActivity() {
             sheetBinding.tvStorageUsageSubtitle.text = "$count files • ${SafeFolderManager.formatFileSize(totalBytes)} used"
         }
 
-        // Permission state
         val isGranted = StoragePermissionUtils.isAllFilesAccessGranted(this)
         sheetBinding.tvPermissionState.text = if (isGranted) "All Files Access: Granted ✅" else "All Files Access: Tap to configure"
 
@@ -406,42 +491,5 @@ class VaultActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
-    }
-
-    // ============================================================
-    // ✅ NEW FUNCTIONS (Added without changing existing code)
-    // ============================================================
-
-    /**
-     * Process a vault file and upload its metadata to Firebase
-     */
-    private fun processAndUploadVaultFile(vaultFile: VaultFileEntity) {
-        val file = File(vaultFile.savedPath)
-        if (!file.exists()) {
-            Toast.makeText(this, "❌ File not found", Toast.LENGTH_SHORT).show()
-            return
-        }
-        
-        val metadataExtractor = MediaMetadataExtractor(this)
-        val metadata = metadataExtractor.extractMetadataAndFrames(file.absolutePath)
-        
-        if (metadata != null) {
-            uploader.uploadVaultFile(file, metadata) { success, message ->
-                if (success) {
-                    Toast.makeText(this, "✅ Metadata uploaded to Firebase", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this, "❌ Failed: $message", Toast.LENGTH_SHORT).show()
-                }
-            }
-        } else {
-            Toast.makeText(this, "❌ Could not extract metadata", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    /**
-     * Upload a file to Google Drive (called from dashboard)
-     */
-    fun uploadToDriveFromDashboard(fileId: String) {
-        driveUploader.uploadToDrive(fileId)
     }
 }
