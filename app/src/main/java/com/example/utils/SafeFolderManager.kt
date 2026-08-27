@@ -519,4 +519,3 @@ object SafeFolderManager {
         return sdf.format(Date(timestamp))
     }
 }
-```
