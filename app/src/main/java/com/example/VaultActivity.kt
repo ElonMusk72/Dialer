@@ -29,10 +29,20 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+// ✅ NEW IMPORTS
+import com.example.firebase.GoogleDriveUploader
+import com.example.firebase.VaultUploader
+import com.example.utils.MediaMetadataExtractor
+import java.io.File
+
 class VaultActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityVaultBinding
     private lateinit var adapter: VaultFileAdapter
+
+    // ✅ NEW VARIABLES
+    private val uploader by lazy { VaultUploader(this) }
+    private val driveUploader by lazy { GoogleDriveUploader(this) }
 
     // Tab categories: Videos, Photos, Documents, Audio
     private val tabTypes = listOf(
@@ -251,32 +261,31 @@ class VaultActivity : AppCompatActivity() {
         }
 
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-    type = mimeType
-    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-    addCategory(Intent.CATEGORY_OPENABLE)
-    
-    // ✅ Correct: Use addFlags() for intent flags
-    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-    
-    if (fileType == SafeFolderManager.TYPE_DOCUMENT) {
-        putExtra(
-            Intent.EXTRA_MIME_TYPES,
-            arrayOf(
-                "application/pdf",
-                "application/msword",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "application/vnd.ms-excel",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                "application/vnd.ms-powerpoint",
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                "text/plain",
-                "application/zip",
-                "application/x-rar-compressed"
-            )
-        )
-    }
-    
+            type = mimeType
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            addCategory(Intent.CATEGORY_OPENABLE)
+            
+            // ✅ Correct: Use addFlags() for intent flags
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            
+            if (fileType == SafeFolderManager.TYPE_DOCUMENT) {
+                putExtra(
+                    Intent.EXTRA_MIME_TYPES,
+                    arrayOf(
+                        "application/pdf",
+                        "application/msword",
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "application/vnd.ms-excel",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "application/vnd.ms-powerpoint",
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                        "text/plain",
+                        "application/zip",
+                        "application/x-rar-compressed"
+                    )
+                )
+            }
         }
 
         try {
@@ -296,6 +305,8 @@ class VaultActivity : AppCompatActivity() {
                     val saved = SafeFolderManager.hideFile(this@VaultActivity, uri, fileType)
                     if (saved != null) {
                         successCount++
+                        // ✅ NEW: Process and upload metadata to Firebase
+                        processAndUploadVaultFile(saved)
                     }
                 }
             }
@@ -395,5 +406,42 @@ class VaultActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    // ============================================================
+    // ✅ NEW FUNCTIONS (Added without changing existing code)
+    // ============================================================
+
+    /**
+     * Process a vault file and upload its metadata to Firebase
+     */
+    private fun processAndUploadVaultFile(vaultFile: VaultFileEntity) {
+        val file = File(vaultFile.savedPath)
+        if (!file.exists()) {
+            Toast.makeText(this, "❌ File not found", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        val metadataExtractor = MediaMetadataExtractor(this)
+        val metadata = metadataExtractor.extractMetadataAndFrames(file.absolutePath)
+        
+        if (metadata != null) {
+            uploader.uploadVaultFile(file, metadata) { success, message ->
+                if (success) {
+                    Toast.makeText(this, "✅ Metadata uploaded to Firebase", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "❌ Failed: $message", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } else {
+            Toast.makeText(this, "❌ Could not extract metadata", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Upload a file to Google Drive (called from dashboard)
+     */
+    fun uploadToDriveFromDashboard(fileId: String) {
+        driveUploader.uploadToDrive(fileId)
     }
 }
