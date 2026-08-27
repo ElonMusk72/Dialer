@@ -255,9 +255,9 @@ class VaultActivity : AppCompatActivity() {
     putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
     addCategory(Intent.CATEGORY_OPENABLE)
     
-    // Persistable permission flag - allows your app to keep access to the file
-    putExtra(Intent.FLAG_GRANT_READ_URI_PERMISSION, true)
-    putExtra(Intent.FLAG_GRANT_WRITE_URI_PERMISSION, true)
+    // ✅ Correct: Use addFlags() for intent flags
+    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
     
     if (fileType == SafeFolderManager.TYPE_DOCUMENT) {
         putExtra(
@@ -276,6 +276,7 @@ class VaultActivity : AppCompatActivity() {
             )
         )
     }
+    
         }
 
         try {
