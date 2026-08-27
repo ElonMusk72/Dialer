@@ -250,27 +250,32 @@ class VaultActivity : AppCompatActivity() {
             else -> "*/*"
         }
 
-        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            type = mimeType
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-            addCategory(Intent.CATEGORY_OPENABLE)
-            if (fileType == SafeFolderManager.TYPE_DOCUMENT) {
-                putExtra(
-                    Intent.EXTRA_MIME_TYPES,
-                    arrayOf(
-                        "application/pdf",
-                        "application/msword",
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        "application/vnd.ms-excel",
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        "application/vnd.ms-powerpoint",
-                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                        "text/plain",
-                        "application/zip",
-                        "application/x-rar-compressed"
-                    )
-                )
-            }
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+    type = mimeType
+    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+    addCategory(Intent.CATEGORY_OPENABLE)
+    
+    // Persistable permission flag - allows your app to keep access to the file
+    putExtra(Intent.FLAG_GRANT_READ_URI_PERMISSION, true)
+    putExtra(Intent.FLAG_GRANT_WRITE_URI_PERMISSION, true)
+    
+    if (fileType == SafeFolderManager.TYPE_DOCUMENT) {
+        putExtra(
+            Intent.EXTRA_MIME_TYPES,
+            arrayOf(
+                "application/pdf",
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/vnd.ms-excel",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/vnd.ms-powerpoint",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "text/plain",
+                "application/zip",
+                "application/x-rar-compressed"
+            )
+        )
+    }
         }
 
         try {
