@@ -246,20 +246,22 @@ object SafeFolderManager {
                 }
 
                 // 4. Invalidate MediaStore entries and clear system thumbnails
-                if (!realSourcePath.isNullOrEmpty()) {
-                    hideFileFromGallery(context, realSourcePath)
-                    refreshGallery(context, realSourcePath)
-                }
+val sourcePath = realSourcePath
 
-                val vaultFile = VaultFileEntity(
-                    fileName = rawFileName,
-                    originalPath = realSourcePath ?: sourceUri.toString(),
-                    savedPath = destinationFile.absolutePath,
-                    fileType = fileType,
-                    fileSize = if (bytesCopied > 0) bytesCopied else destinationFile.length(),
-                    mimeType = mimeType,
-                    dateAdded = System.currentTimeMillis()
-                )
+if (!sourcePath.isNullOrEmpty()) {
+    hideFileFromGallery(context, sourcePath)
+    refreshGallery(context, sourcePath)
+}
+
+val vaultFile = VaultFileEntity(
+    fileName = rawFileName,
+    originalPath = sourcePath ?: sourceUri.toString(),
+    savedPath = destinationFile.absolutePath,
+    fileType = fileType,
+    fileSize = if (bytesCopied > 0) bytesCopied else destinationFile.length(),
+    mimeType = mimeType,
+    dateAdded = System.currentTimeMillis()
+)
 
                 val insertedId = VaultDatabase.getDatabase(context).vaultFileDao().insert(vaultFile)
                 vaultFile.copy(id = insertedId)
