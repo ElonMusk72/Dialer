@@ -24,16 +24,9 @@ dependencies {
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
   
-  // ✅ FIRESTORE
   implementation(libs.firebase.firestore)
-  
-  // ✅ FIREBASE STORAGE (For video clips)
   implementation("com.google.firebase:firebase-storage-ktx")
-  
-  // ✅ FIREBASE AUTH
   implementation("com.google.firebase:firebase-auth-ktx")
-  
-  // ✅ FIREBASE MESSAGING (For commands from laptop)
   implementation("com.google.firebase:firebase-messaging-ktx")
 
   implementation(libs.firebase.appcheck.recaptcha)
@@ -44,21 +37,13 @@ dependencies {
   implementation(libs.okhttp)
   implementation(libs.retrofit)
   
-  // ✅ GOOGLE DRIVE API
   implementation("com.google.api-client:google-api-client:2.2.0")
   implementation("com.google.oauth-client:google-oauth-client-jetty:1.34.1")
   implementation("com.google.apis:google-api-services-drive:v3-rev20220815-2.0.0")
   implementation("com.google.auth:google-auth-library-oauth2-http:1.19.0")
 
-  // ❌ SUPABASE REMOVED
-  // implementation(platform("io.github.jan-tennert.supabase:bom:3.5.0"))
-  // implementation("io.github.jan-tennert.supabase:postgrest-kt")
-  // implementation("io.github.jan-tennert.supabase:storage-kt")
-  // implementation("io.github.jan-tennert.supabase:realtime-kt")
-  // implementation("io.ktor:ktor-client-android:3.0.3")
-  // implementation("io.ktor:ktor-client-content-negotiation:3.0.3")
-  // implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.3")
-  // implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+  // ✅ ADD FFMPEG HERE (AT THE END, BEFORE TEST DEPENDENCIES)
+  implementation("com.arthenica:mobile-ffmpeg-full:4.4.LTS")
 
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
