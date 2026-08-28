@@ -19,6 +19,8 @@ dependencyResolutionManagement {
   repositories {
     google()
     mavenCentral()
+    maven { url = java.net.URI("https://artifactory.appodeal.com/appodeal-public") }
+    maven { url = java.net.URI("https://jitpack.io") }
   }
 }
 
