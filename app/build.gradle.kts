@@ -23,12 +23,10 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
-  
   implementation(libs.firebase.firestore)
   implementation("com.google.firebase:firebase-storage-ktx")
   implementation("com.google.firebase:firebase-auth-ktx")
   implementation("com.google.firebase:firebase-messaging-ktx")
-
   implementation(libs.firebase.appcheck.recaptcha)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
@@ -42,8 +40,8 @@ dependencies {
   implementation("com.google.apis:google-api-services-drive:v3-rev20220815-2.0.0")
   implementation("com.google.auth:google-auth-library-oauth2-http:1.19.0")
 
-  // ✅ ADD FFMPEG HERE (AT THE END, BEFORE TEST DEPENDENCIES)
-  implementation("com.arthenica:mobile-ffmpeg-full:4.4.LTS")
+  // ✅ REPLACED: New maintained FFmpeg Kit library
+  implementation("com.arthenica:ffmpeg-kit-full:6.0-2")
 
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
