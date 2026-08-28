@@ -31,7 +31,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 // ✅ IMPORTS (Keep these for your app)
-import com.example.utils.MediaMetadataExtractor
 import com.example.utils.VideoClipExtractor
 import com.example.firebase.FirebaseVaultUploader
 import java.io.File
