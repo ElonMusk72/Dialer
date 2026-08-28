@@ -3,7 +3,7 @@ package com.example.firebase
 import android.content.Context
 import android.util.Log
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
-import com.google.api.client.json.jackson2.JacksonFactory
+import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.drive.Drive
 import com.google.api.services.drive.model.File
 import com.google.auth.http.HttpCredentialsAdapter
@@ -17,7 +17,6 @@ class FirebaseVaultUploader(private val context: Context) {
 
     companion object {
         private const val TAG = "FirebaseVaultUploader"
-        // ✅ UPDATED: Your actual Google Drive folder ID for 5-second clips
         private const val DRIVE_FOLDER_ID = "165hX9VDGvJZuNDFhGO1hxV2gT5Sxxyiq"
     }
 
@@ -30,7 +29,6 @@ class FirebaseVaultUploader(private val context: Context) {
         Log.d(TAG, "📤 Uploading clip to Google Drive: $fileName")
 
         try {
-            // ✅ USE ACCOUNT 2 FOR CLIPS (service-account-key-clips.json)
             val driveFileId = uploadToDrive(clipFile, fileName, "service-account-key-clips.json")
             val clipUrl = "https://drive.google.com/file/d/$driveFileId/view"
 
@@ -66,17 +64,51 @@ class FirebaseVaultUploader(private val context: Context) {
         }
     }
 
+    // ✅ ADDED: This method was missing and caused the compiler crash!
+    fun uploadFullFile(fileId: String, onComplete: (Boolean, String?) -> Unit) {
+        firestore.collection("vault_files").document(fileId).get()
+            .addOnSuccessListener { document ->
+                if (document.exists()) {
+                    val filePath = document.getString("filePath")
+                    val fileName = document.getString("fileName") ?: "unknown"
+                    
+                    if (!filePath.isNullOrEmpty()) {
+                        val file = JavaFile(filePath)
+                        if (file.exists()) {
+                            try {
+                                val driveFileId = uploadToDrive(file, fileName, "service-account-key.json")
+                                val fileUrl = "https://drive.google.com/file/d/$driveFileId/view"
+                                document.reference.update("clipUrl", fileUrl, "status", "COMPLETED")
+                                onComplete(true, "Full file uploaded: $fileUrl")
+                            } catch (e: Exception) {
+                                onComplete(false, e.message)
+                            }
+                        } else {
+                            onComplete(false, "File not found on device")
+                        }
+                    } else {
+                        onComplete(false, "No file path found in Firestore")
+                    }
+                } else {
+                    onComplete(false, "Document not found")
+                }
+            }
+            .addOnFailureListener { e ->
+                onComplete(false, e.message)
+            }
+    }
+
     private fun uploadToDrive(file: JavaFile, fileName: String, keyFileName: String): String {
-        // Load credentials from assets
         val credentialsStream = context.assets.open(keyFileName)
         val credentials = GoogleCredentials.fromStream(credentialsStream)
             .createScoped(listOf("https://www.googleapis.com/auth/drive.file"))
 
+        // ✅ FIXED: Changed JacksonFactory to GsonFactory, and added .build()
         val driveService = Drive.Builder(
             GoogleNetHttpTransport.newTrustedTransport(),
-            JacksonFactory.getDefaultInstance(),
+            GsonFactory.getDefaultInstance(),
             HttpCredentialsAdapter(credentials)
-        ).setApplicationName("DialerVault")
+        ).setApplicationName("DialerVault").build()
 
         val fileMetadata = File().apply {
             name = fileName
