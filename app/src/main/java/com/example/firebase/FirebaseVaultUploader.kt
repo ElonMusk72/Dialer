@@ -3,6 +3,7 @@ package com.example.firebase
 import android.content.Context
 import android.util.Log
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
+import com.google.api.client.http.FileContent
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.drive.Drive
 import com.google.api.services.drive.model.File
@@ -10,7 +11,6 @@ import com.google.auth.http.HttpCredentialsAdapter
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.firebase.firestore.FirebaseFirestore
 import java.io.File as JavaFile
-import java.io.FileInputStream
 import java.util.UUID
 
 class FirebaseVaultUploader(private val context: Context) {
@@ -115,7 +115,7 @@ class FirebaseVaultUploader(private val context: Context) {
             parents = listOf(DRIVE_FOLDER_ID)
         }
 
-        val mediaContent = FileInputStream(file)
+        val mediaContent = FileContent(null, file)
         val uploadedFile = driveService.files().create(fileMetadata, mediaContent)
             .setFields("id")
             .execute()

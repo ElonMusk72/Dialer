@@ -89,7 +89,7 @@ jobs:
       - name: Build debug APK
         id: build_step
         run: |
-          gradle :app:assembleDebug --stacktrace --no-daemon
+          gradle :app:assembleDebug --stacktrace --no-daemon --no-configuration-cache
 
       - name: Verify debug APK output
         if: steps.build_step.outcome == 'success'
