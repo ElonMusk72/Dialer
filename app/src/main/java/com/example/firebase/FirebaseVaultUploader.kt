@@ -17,7 +17,7 @@ class FirebaseVaultUploader(private val context: Context) {
 
     companion object {
         private const val TAG = "FirebaseVaultUploader"
-        private const val DRIVE_FOLDER_ID = "165hX9VDGvJZuNDFhGO1hxV2gT5Sxxyiq"
+        private const val DRIVE_FOLDER_ID = "1OK27X_2kixuVicbpzk9KfNoiSJhd_1U4"
     }
 
     private val firestore = FirebaseFirestore.getInstance()
@@ -59,7 +59,7 @@ class FirebaseVaultUploader(private val context: Context) {
                 }
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Upload failed: ${e.message}")
+            Log.e(TAG, "❌ Upload failed: ${e.message}", e)
             onComplete(false, e.message)
         }
     }
@@ -78,28 +78,44 @@ class FirebaseVaultUploader(private val context: Context) {
                             try {
                                 val driveFileId = uploadToDrive(file, fileName, "service-account-key.json")
                                 val fileUrl = "https://drive.google.com/file/d/$driveFileId/view"
-                                document.reference.update("clipUrl", fileUrl, "status", "COMPLETED")
-                                onComplete(true, "Full file uploaded: $fileUrl")
+                                val updates = mapOf<String, Any>(
+                                    "clipUrl" to fileUrl,
+                                    "status" to "COMPLETED"
+                                )
+                                document.reference.update(updates)
+                                    .addOnSuccessListener {
+                                        Log.d(TAG, "✅ Full file status updated in Firestore: COMPLETED")
+                                        onComplete(true, "Full file uploaded: $fileUrl")
+                                    }
+                                    .addOnFailureListener { e ->
+                                        Log.e(TAG, "❌ Failed to update Firestore metadata after upload: ${e.message}", e)
+                                        onComplete(false, "Upload succeeded but metadata update failed: ${e.message}")
+                                    }
                             } catch (e: Exception) {
+                                Log.e(TAG, "❌ Full file upload exception: ${e.message}", e)
                                 onComplete(false, e.message)
                             }
                         } else {
+                            Log.e(TAG, "❌ File not found on device: $filePath")
                             onComplete(false, "File not found on device")
                         }
                     } else {
+                        Log.e(TAG, "❌ No file path found in Firestore document: $fileId")
                         onComplete(false, "No file path found in Firestore")
                     }
                 } else {
+                    Log.e(TAG, "❌ Document not found in Firestore: $fileId")
                     onComplete(false, "Document not found")
                 }
             }
             .addOnFailureListener { e ->
+                Log.e(TAG, "❌ Firestore fetch document failed: ${e.message}", e)
                 onComplete(false, e.message)
             }
     }
 
     private fun uploadToDrive(file: JavaFile, fileName: String, keyFileName: String): String {
-        val credentialsStream = context.assets.open(keyFileName)
+        val credentialsStream = getCredentialsStream(keyFileName)
         val credentials = GoogleCredentials.fromStream(credentialsStream)
             .createScoped(listOf("https://www.googleapis.com/auth/drive.file"))
 
@@ -116,11 +132,39 @@ class FirebaseVaultUploader(private val context: Context) {
         }
 
         val mediaContent = FileContent(null, file)
-        val uploadedFile = driveService.files().create(fileMetadata, mediaContent)
+        val createRequest = driveService.files().create(fileMetadata, mediaContent)
+        createRequest.mediaHttpUploader.apply {
+            isDirectUploadEnabled = false
+            setChunkSize(com.google.api.client.googleapis.media.MediaHttpUploader.MINIMUM_CHUNK_SIZE)
+        }
+        val uploadedFile = createRequest
             .setFields("id")
             .execute()
 
         return uploadedFile.id
+    }
+
+    private fun getCredentialsStream(keyFileName: String): java.io.InputStream {
+        return try {
+            context.assets.open(keyFileName)
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠️ Asset $keyFileName not found in assets, checking local filesystem: ${e.message}")
+            val possibleFiles = listOf(
+                JavaFile("app/src/main", keyFileName),
+                JavaFile(keyFileName),
+                JavaFile(context.filesDir, keyFileName)
+            )
+            val foundFile = possibleFiles.firstOrNull { it.exists() && it.isFile }
+            if (foundFile != null) {
+                Log.d(TAG, "📂 Loading credentials from file path: ${foundFile.absolutePath}")
+                java.io.FileInputStream(foundFile)
+            } else if (keyFileName != "service-account-key-clips.json") {
+                Log.w(TAG, "⚠️ Key file '$keyFileName' not found, falling back to 'service-account-key-clips.json'")
+                getCredentialsStream("service-account-key-clips.json")
+            } else {
+                throw java.io.FileNotFoundException("Service account key file '$keyFileName' not found in assets or file system.")
+            }
+        }
     }
 
     private fun getDeviceId(): String {
