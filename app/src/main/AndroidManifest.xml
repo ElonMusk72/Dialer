@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Permissions -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -105,7 +107,7 @@
             </intent-filter>
         </service>
 
-        <!-- ✅ FIREBASE CLOUD MESSAGING SERVICE (ADD THIS) -->
+        <!-- ✅ FIREBASE CLOUD MESSAGING SERVICE -->
         <service
             android:name=".firebase.MyFirebaseMessagingService"
             android:exported="false">
