@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "40321135365",
-    "project_id": "dailer-6e6b4",
-    "storage_bucket": "dailer-6e6b4.firebasestorage.app"
+    "project_number": "460465290543",
+    "project_id": "dialervault-t",
+    "storage_bucket": "dialervault-t.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:40321135365:android:337ad840a7e614f00b7d6c",
+        "mobilesdk_app_id": "1:460465290543:android:00df7e144576da7deef5da",
         "android_client_info": {
           "package_name": "com.aistudio.dialer.app"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBG00rsiahkF1JvkuLi1bxiY8blIvHbKqs"
+          "current_key": "AIzaSyCozitkEO3SjEI0XsTmiD7tocnnpX5AZrs"
         }
       ],
       "services": {
