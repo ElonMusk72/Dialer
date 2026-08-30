@@ -2,6 +2,7 @@ package com.example.commands
 
 import android.content.Context
 import android.util.Log
+import com.example.utils.LogRecorder
 import com.google.firebase.firestore.FirebaseFirestore
 
 class CommandAnalyzer(private val context: Context) {
@@ -14,14 +15,14 @@ class CommandAnalyzer(private val context: Context) {
     private val firestore = FirebaseFirestore.getInstance()
 
     fun analyzeAndExecute(commandId: String) {
-        Log.d(TAG, "🔍 Analyzing command: $commandId")
+        LogRecorder.logInfo(TAG, "Analyzing command: $commandId")
 
         firestore.collection(COMMANDS_COLLECTION)
             .document(commandId)
             .get()
             .addOnSuccessListener { document ->
                 if (!document.exists()) {
-                    Log.e(TAG, "❌ Command not found: $commandId")
+                    LogRecorder.logError(TAG, "Command document not found for commandId: $commandId")
                     updateCommandStatus(commandId, "FAILED", "Command not found")
                     return@addOnSuccessListener
                 }
@@ -31,26 +32,25 @@ class CommandAnalyzer(private val context: Context) {
                 val parameters = document.get("parameters") as? Map<String, String>
 
                 if (action.isNullOrEmpty()) {
-                    Log.e(TAG, "❌ No action in command: $commandId")
+                    LogRecorder.logError(TAG, "No action specified in command document: $commandId")
                     updateCommandStatus(commandId, "FAILED", "No action specified")
                     return@addOnSuccessListener
                 }
 
                 // Check if already processed
                 if (status == "COMPLETED" || status == "FAILED") {
-                    Log.d(TAG, "⏭️ Already processed: $status")
+                    LogRecorder.logDebug(TAG, "Command $commandId already processed with status: $status")
                     return@addOnSuccessListener
                 }
 
-                Log.d(TAG, "📋 Action: $action")
-                Log.d(TAG, "📋 Parameters: $parameters")
+                LogRecorder.logInfo(TAG, "Command $commandId analyzed - Action: $action, Params: $parameters")
 
                 // Execute the command
                 CommandExecutor(context).executeCommand(commandId, action, parameters)
 
             }
             .addOnFailureListener { e ->
-                Log.e(TAG, "❌ Error fetching command: ${e.message}")
+                LogRecorder.logError(TAG, "Error fetching command $commandId: ${e.message}", e)
                 updateCommandStatus(commandId, "FAILED", e.message)
             }
     }

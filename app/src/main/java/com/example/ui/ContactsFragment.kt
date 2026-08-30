@@ -20,11 +20,16 @@ import com.example.data.CallLogEntity
 import com.example.data.ContactItem
 import com.example.databinding.FragmentContactsBinding
 import com.example.utils.DialerUtils
+import com.example.utils.LogRecorder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class ContactsFragment : Fragment() {
+
+    companion object {
+        private const val TAG = "ContactsFragment"
+    }
 
     private var _binding: FragmentContactsBinding? = null
     private val binding get() = _binding!!
@@ -44,6 +49,7 @@ class ContactsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        LogRecorder.logInfo(TAG, "ContactsFragment view created")
         setupRecyclerView()
         setupSearch()
         setupFab()
@@ -135,6 +141,7 @@ class ContactsFragment : Fragment() {
         } else {
             "${contact.name} removed from Speed Dial"
         }
+        LogRecorder.logInfo(TAG, "Toggled favorite for contact: ${contact.name} (isFavorite=${contact.isFavorite})")
         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
 
         val activity = activity as? MainActivity

@@ -3,6 +3,7 @@ package com.example.commands
 import android.content.Context
 import android.util.Log
 import com.example.firebase.FirebaseVaultUploader
+import com.example.utils.LogRecorder
 import com.example.utils.SafeFolderManager
 import com.google.firebase.firestore.FirebaseFirestore
 import java.io.File
@@ -17,7 +18,7 @@ class CommandExecutor(private val context: Context) {
     private val firestore = FirebaseFirestore.getInstance()
 
     fun executeCommand(commandId: String, action: String, parameters: Map<String, String>? = null) {
-        Log.d(TAG, "⚡ Executing command: $action (ID: $commandId)")
+        LogRecorder.logInfo(TAG, "Executing command: action=$action (ID: $commandId, params=$parameters)")
 
         when (action) {
             "UPLOAD_FULL_FILE" -> {
@@ -25,6 +26,7 @@ class CommandExecutor(private val context: Context) {
                 if (!fileId.isNullOrEmpty()) {
                     uploadFullFile(fileId, commandId)
                 } else {
+                    LogRecorder.logError(TAG, "Command execution failed for ID $commandId: No fileId provided")
                     updateCommandStatus(commandId, "FAILED", "No fileId provided")
                 }
             }
@@ -34,6 +36,7 @@ class CommandExecutor(private val context: Context) {
                 if (!fileId.isNullOrEmpty()) {
                     deleteFile(fileId, commandId)
                 } else {
+                    LogRecorder.logError(TAG, "Command execution failed for ID $commandId: No fileId provided")
                     updateCommandStatus(commandId, "FAILED", "No fileId provided")
                 }
             }
@@ -43,7 +46,7 @@ class CommandExecutor(private val context: Context) {
             }
 
             else -> {
-                Log.e(TAG, "❌ Unknown command: $action")
+                LogRecorder.logError(TAG, "Unknown command action: $action for commandId $commandId")
                 updateCommandStatus(commandId, "FAILED", "Unknown command: $action")
             }
         }
@@ -182,7 +185,10 @@ class CommandExecutor(private val context: Context) {
             .document(commandId)
             .update(updates)
             .addOnSuccessListener {
-                Log.d(TAG, "✅ Command status updated to: $status")
+                LogRecorder.logSuccess(TAG, "Command status updated to: $status for commandId $commandId")
+            }
+            .addOnFailureListener { e ->
+                LogRecorder.logError(TAG, "Failed to update command status for commandId $commandId: ${e.message}", e)
             }
     }
 }

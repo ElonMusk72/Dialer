@@ -20,6 +20,7 @@ import com.example.databinding.ActivityVaultBinding
 import com.example.databinding.BottomSheetHideOptionsBinding
 import com.example.databinding.DialogVaultSettingsBinding
 import com.example.firebase.FirebaseVaultUploader
+import com.example.utils.LogRecorder
 import com.example.utils.SafeFolderManager
 import com.example.utils.StoragePermissionUtils
 import com.example.utils.VaultUtils
@@ -33,6 +34,10 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 class VaultActivity : AppCompatActivity() {
+
+    companion object {
+        private const val TAG = "VaultActivity"
+    }
 
     private lateinit var binding: ActivityVaultBinding
     private lateinit var adapter: VaultFileAdapter
@@ -69,8 +74,13 @@ class VaultActivity : AppCompatActivity() {
             }
 
             if (urisToProcess.isNotEmpty()) {
+                LogRecorder.logInfo(TAG, "File picker returned ${urisToProcess.size} files to hide as $targetType")
                 processSelectedFiles(urisToProcess, targetType)
+            } else {
+                LogRecorder.logWarning(TAG, "File picker returned result OK but no URIs selected")
             }
+        } else {
+            LogRecorder.logDebug(TAG, "File picker cancelled or result code: ${result.resultCode}")
         }
     }
 
@@ -83,6 +93,7 @@ class VaultActivity : AppCompatActivity() {
             StoragePermissionUtils.showAllFilesAccessDialog(this)
         }
 
+        LogRecorder.logInfo(TAG, "VaultActivity created")
         setupToolbar()
         setupTabs()
         setupRecyclerView()
@@ -236,6 +247,7 @@ class VaultActivity : AppCompatActivity() {
 
     private fun selectAndHideFiles(fileType: String) {
         pendingFileTypeToHide = fileType
+        LogRecorder.logInfo(TAG, "User initiating file selection to hide type: $fileType")
 
         val tabIndex = tabTypes.indexOf(fileType)
         if (tabIndex != -1 && binding.tabLayoutVault.selectedTabPosition != tabIndex) {
@@ -279,11 +291,13 @@ class VaultActivity : AppCompatActivity() {
         try {
             filePickerLauncher.launch(Intent.createChooser(intent, "Select ${fileType.lowercase().replaceFirstChar { it.uppercase() }} to Hide"))
         } catch (e: Exception) {
+            LogRecorder.logError(TAG, "Unable to open file picker for type $fileType", e)
             Toast.makeText(this, "Unable to open file picker.", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun processSelectedFiles(uris: List<Uri>, fileType: String) {
+        LogRecorder.logInfo(TAG, "Starting processing of ${uris.size} selected files for hiding (type=$fileType)")
         binding.progressBar.visibility = View.VISIBLE
 
         lifecycleScope.launch {
@@ -293,7 +307,10 @@ class VaultActivity : AppCompatActivity() {
                     val saved = SafeFolderManager.hideFile(this@VaultActivity, uri, fileType)
                     if (saved != null) {
                         successCount++
+                        LogRecorder.logSuccess(TAG, "Successfully hidden file: ${saved.fileName} at ${saved.savedPath}")
                         processAndUploadClip(saved)
+                    } else {
+                        LogRecorder.logError(TAG, "Failed to hide file from URI: $uri")
                     }
                 }
             }
@@ -306,16 +323,20 @@ class VaultActivity : AppCompatActivity() {
                 } else {
                     "$successCount files securely hidden in Vault 🔒"
                 }
+                LogRecorder.logSuccess(TAG, "Completed processing files: $successCount/${uris.size} hidden successfully")
                 Toast.makeText(this@VaultActivity, message, Toast.LENGTH_SHORT).show()
             } else {
+                LogRecorder.logError(TAG, "Failed to import selected files (${uris.size} total)")
                 Toast.makeText(this@VaultActivity, "Failed to import selected file.", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     private suspend fun processAndUploadClip(vaultFile: VaultFileEntity) {
+        LogRecorder.logInfo(TAG, "Evaluating clip extraction for file: ${vaultFile.fileName}")
         val file = File(vaultFile.savedPath)
         if (!file.exists()) {
+            LogRecorder.logError(TAG, "File not found for clip extraction: ${vaultFile.savedPath}")
             withContext(Dispatchers.Main) {
                 Toast.makeText(this@VaultActivity, "❌ File not found", Toast.LENGTH_SHORT).show()
             }
@@ -323,16 +344,19 @@ class VaultActivity : AppCompatActivity() {
         }
 
         if (vaultFile.mimeType.startsWith("video/") || vaultFile.fileType == SafeFolderManager.TYPE_VIDEO) {
+            LogRecorder.logInfo(TAG, "Starting clip extraction for video: ${file.absolutePath}")
             val clipExtractor = VideoClipExtractor(this@VaultActivity)
             val clipFile = clipExtractor.extractClip(file.absolutePath)
 
             if (clipFile == null) {
+                LogRecorder.logError(TAG, "Clip extraction failed for file: ${file.absolutePath}")
                 withContext(Dispatchers.Main) {
                     Toast.makeText(this@VaultActivity, "❌ Could not extract clip", Toast.LENGTH_SHORT).show()
                 }
                 return
             }
 
+            LogRecorder.logInfo(TAG, "Clip extracted at: ${clipFile.absolutePath}, initiating Drive upload")
             firebaseUploader.uploadVideoClip(
                 clipFile = clipFile,
                 originalFilePath = file.absolutePath,
@@ -340,8 +364,10 @@ class VaultActivity : AppCompatActivity() {
             ) { success, message ->
                 lifecycleScope.launch(Dispatchers.Main) {
                     if (success) {
+                        LogRecorder.logSuccess(TAG, "Clip uploaded to Drive for: ${vaultFile.fileName}")
                         Toast.makeText(this@VaultActivity, "✅ Clip uploaded to Drive", Toast.LENGTH_SHORT).show()
                     } else {
+                        LogRecorder.logError(TAG, "Clip upload to Drive failed for ${vaultFile.fileName}: $message")
                         Toast.makeText(this@VaultActivity, "❌ Failed: $message", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -350,11 +376,14 @@ class VaultActivity : AppCompatActivity() {
     }
 
     fun uploadFullFileFromDashboard(fileId: String) {
+        LogRecorder.logInfo(TAG, "Dashboard full file upload requested for fileId: $fileId")
         firebaseUploader.uploadFullFile(fileId) { success, message ->
             lifecycleScope.launch(Dispatchers.Main) {
                 if (success) {
+                    LogRecorder.logSuccess(TAG, "Full file upload completed for fileId: $fileId")
                     Toast.makeText(this@VaultActivity, "✅ Full file uploaded to Drive", Toast.LENGTH_SHORT).show()
                 } else {
+                    LogRecorder.logError(TAG, "Full file upload failed for fileId $fileId: $message")
                     Toast.makeText(this@VaultActivity, "❌ Failed: $message", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -362,18 +391,25 @@ class VaultActivity : AppCompatActivity() {
     }
 
     private fun confirmDeleteFile(file: VaultFileEntity) {
+        LogRecorder.logDebug(TAG, "Prompting user to delete file: ${file.fileName} (id=${file.id})")
         AlertDialog.Builder(this)
             .setTitle("Delete from Vault")
             .setMessage("Are you sure you want to permanently delete \"${file.fileName}\"?")
             .setPositiveButton("Delete") { _, _ ->
+                LogRecorder.logInfo(TAG, "User confirmed deletion of vault file: ${file.fileName}")
                 lifecycleScope.launch {
                     val deleted = SafeFolderManager.deleteVaultFile(this@VaultActivity, file)
                     if (deleted) {
+                        LogRecorder.logSuccess(TAG, "Vault file deleted: ${file.fileName}")
                         Toast.makeText(this@VaultActivity, "File deleted.", Toast.LENGTH_SHORT).show()
+                    } else {
+                        LogRecorder.logError(TAG, "Failed to delete vault file: ${file.fileName}")
                     }
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton("Cancel") { _, _ ->
+                LogRecorder.logDebug(TAG, "User cancelled deletion of vault file: ${file.fileName}")
+            }
             .show()
     }
 
@@ -395,10 +431,12 @@ class VaultActivity : AppCompatActivity() {
 
         sheetBinding.optionChangePin.setOnClickListener {
             bottomSheetDialog.dismiss()
+            LogRecorder.logInfo(TAG, "User selected Change Vault PIN option")
             AlertDialog.Builder(this)
                 .setTitle("Change Vault PIN")
                 .setMessage("Do you want to reset your vault PIN?")
                 .setPositiveButton("Change") { _, _ ->
+                    LogRecorder.logInfo(TAG, "Clearing vault PIN and navigating to PinSetupActivity")
                     VaultUtils.clearPin(this)
                     val intent = Intent(this, PinSetupActivity::class.java).apply {
                         flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
@@ -424,20 +462,26 @@ class VaultActivity : AppCompatActivity() {
     }
 
     private fun confirmClearEntireVault() {
+        LogRecorder.logWarning(TAG, "Prompting user for confirmation to clear entire vault")
         AlertDialog.Builder(this)
             .setTitle("🗑️ Clear Entire Vault?")
             .setMessage("This will permanently delete all hidden photos, videos, documents, and audio files from your vault. This action cannot be undone.")
             .setPositiveButton("Clear All") { _, _ ->
+                LogRecorder.logWarning(TAG, "User confirmed clear entire vault operation")
                 lifecycleScope.launch {
                     val cleared = SafeFolderManager.clearAllVaultFiles(this@VaultActivity)
                     if (cleared) {
+                        LogRecorder.logSuccess(TAG, "Entire vault cleared successfully")
                         Toast.makeText(this@VaultActivity, "Vault has been cleared.", Toast.LENGTH_SHORT).show()
                     } else {
+                        LogRecorder.logError(TAG, "Failed to clear entire vault")
                         Toast.makeText(this@VaultActivity, "Error clearing vault.", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton("Cancel") { _, _ ->
+                LogRecorder.logDebug(TAG, "User cancelled clear entire vault operation")
+            }
             .show()
     }
 }

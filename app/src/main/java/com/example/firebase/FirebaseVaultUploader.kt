@@ -3,6 +3,7 @@ package com.example.firebase
 import android.content.Context
 import android.util.Log
 import com.example.data.VaultDatabase
+import com.example.utils.LogRecorder
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.http.FileContent
 import com.google.api.client.json.gson.GsonFactory
@@ -41,14 +42,14 @@ class FirebaseVaultUploader(private val context: Context) {
         val fileName = originalFileName ?: clipFile.name
         val filePath = originalFilePath ?: clipFile.absolutePath
 
-        Log.d(TAG, "📤 Uploading clip to Google Drive: $fileName")
+        LogRecorder.logInfo(TAG, "Starting uploadVideoClip for file: $fileName (clip path: ${clipFile.absolutePath})")
 
         scope.launch {
             try {
                 val clipDriveFileId = uploadToDrive(clipFile, clipFile.name, CLIPS_KEY_FILE, CLIPS_FOLDER_ID)
                 val clipUrl = "https://drive.google.com/file/d/$clipDriveFileId/view"
 
-                Log.d(TAG, "✅ Clip uploaded to Drive (ID: $clipDriveFileId, URL: $clipUrl)")
+                LogRecorder.logSuccess(TAG, "Clip uploaded to Drive (ID: $clipDriveFileId, URL: $clipUrl)")
 
                 val fileData = hashMapOf(
                     "id" to documentId,
@@ -67,17 +68,17 @@ class FirebaseVaultUploader(private val context: Context) {
                         .document(documentId)
                         .set(fileData)
                         .addOnSuccessListener {
-                            Log.d(TAG, "✅ Metadata saved to Firestore with ID: $documentId")
+                            LogRecorder.logSuccess(TAG, "Clip metadata saved to Firestore with document ID: $documentId")
                             onComplete(true, "Upload complete")
                         }
                         .addOnFailureListener { e ->
-                            Log.e(TAG, "❌ Failed to save metadata to Firestore: ${e.message}")
+                            LogRecorder.logError(TAG, "Failed to save clip metadata to Firestore for document $documentId: ${e.message}")
                             onComplete(false, e.message)
                         }
                 }
 
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Clip upload failed: ${e.message}", e)
+                LogRecorder.logError(TAG, "Clip upload failed for $fileName: ${e.message}", e)
                 withContext(Dispatchers.Main) {
                     onComplete(false, e.message)
                 }
@@ -86,7 +87,7 @@ class FirebaseVaultUploader(private val context: Context) {
     }
 
     fun uploadFullFile(fileId: String, onComplete: (Boolean, String?) -> Unit) {
-        Log.d(TAG, "📥 Requested full file upload for fileId: $fileId")
+        LogRecorder.logInfo(TAG, "Requested full file upload for fileId: $fileId")
         firestore.collection("vault_files").document(fileId).get()
             .addOnSuccessListener { document ->
                 if (document.exists()) {
@@ -98,7 +99,7 @@ class FirebaseVaultUploader(private val context: Context) {
                         if (file.exists()) {
                             scope.launch {
                                 try {
-                                    Log.d(TAG, "📤 Uploading full file to Google Drive: $fileName")
+                                    LogRecorder.logInfo(TAG, "Uploading full file '$fileName' to Drive (size=${file.length()} bytes)")
                                     val fullDriveFileId = uploadToDrive(file, fileName, FULL_KEY_FILE, FULL_FOLDER_ID)
                                     val fullDriveUrl = "https://drive.google.com/file/d/$fullDriveFileId/view"
 
@@ -110,16 +111,16 @@ class FirebaseVaultUploader(private val context: Context) {
                                     withContext(Dispatchers.Main) {
                                         document.reference.update(updates)
                                             .addOnSuccessListener {
-                                                Log.d(TAG, "✅ Full file uploaded & status updated to UPLOADED")
+                                                LogRecorder.logSuccess(TAG, "Full file uploaded & Firestore updated to UPLOADED for fileId: $fileId")
                                                 onComplete(true, "Full file uploaded: $fullDriveUrl")
                                             }
                                             .addOnFailureListener { e ->
-                                                Log.e(TAG, "❌ Failed to update Firestore: ${e.message}", e)
+                                                LogRecorder.logError(TAG, "Failed to update Firestore metadata after upload for fileId $fileId: ${e.message}")
                                                 onComplete(false, "Upload succeeded but metadata update failed: ${e.message}")
                                             }
                                     }
                                 } catch (e: Exception) {
-                                    Log.e(TAG, "❌ Full file upload failed: ${e.message}", e)
+                                    LogRecorder.logError(TAG, "Full file upload failed for fileId $fileId: ${e.message}", e)
                                     withContext(Dispatchers.Main) {
                                         document.reference.update("status", "FAILED")
                                         onComplete(false, e.message)
@@ -127,27 +128,27 @@ class FirebaseVaultUploader(private val context: Context) {
                                 }
                             }
                         } else {
-                            Log.e(TAG, "❌ File not found on device: $filePath")
+                            LogRecorder.logError(TAG, "Full file not found on device: $filePath")
                             document.reference.update("status", "FAILED")
                             onComplete(false, "File not found on device")
                         }
                     } else {
-                        Log.e(TAG, "❌ No file path found in Firestore document: $fileId")
+                        LogRecorder.logError(TAG, "No file path found in Firestore document: $fileId")
                         onComplete(false, "No file path found in Firestore")
                     }
                 } else {
-                    Log.e(TAG, "❌ Document not found in Firestore: $fileId")
+                    LogRecorder.logError(TAG, "Document not found in Firestore for fileId: $fileId")
                     onComplete(false, "Document not found")
                 }
             }
             .addOnFailureListener { e ->
-                Log.e(TAG, "❌ Firestore fetch document failed: ${e.message}", e)
+                LogRecorder.logError(TAG, "Firestore fetch document failed for fileId $fileId: ${e.message}", e)
                 onComplete(false, e.message)
             }
     }
 
     fun deleteFile(fileId: String, onComplete: (Boolean, String?) -> Unit) {
-        Log.d(TAG, "🗑️ Requested delete for fileId: $fileId")
+        LogRecorder.logInfo(TAG, "Requested delete for fileId: $fileId")
         firestore.collection("vault_files").document(fileId).get()
             .addOnSuccessListener { document ->
                 if (document.exists()) {
@@ -157,7 +158,7 @@ class FirebaseVaultUploader(private val context: Context) {
                             val file = JavaFile(filePath)
                             if (file.exists()) {
                                 file.delete()
-                                Log.d(TAG, "🗑️ Local file deleted: $filePath")
+                                LogRecorder.logSuccess(TAG, "Local file deleted: $filePath")
                             }
 
                             // Delete from local Room database if exists
@@ -167,37 +168,38 @@ class FirebaseVaultUploader(private val context: Context) {
                                 val matchingEntity = allFiles.find { it.savedPath == filePath }
                                 if (matchingEntity != null) {
                                     dao.delete(matchingEntity)
-                                    Log.d(TAG, "🗑️ Room DB entry deleted for: ${matchingEntity.fileName}")
+                                    LogRecorder.logSuccess(TAG, "Room DB entry deleted for: ${matchingEntity.fileName}")
                                 }
                             } catch (e: Exception) {
-                                Log.e(TAG, "⚠️ Error deleting from Room database: ${e.message}")
+                                LogRecorder.logWarning(TAG, "Error deleting from Room database: ${e.message}")
                             }
                         }
 
                         withContext(Dispatchers.Main) {
                             document.reference.delete()
                                 .addOnSuccessListener {
-                                    Log.d(TAG, "🗑️ Firestore document deleted: $fileId")
+                                    LogRecorder.logSuccess(TAG, "Firestore document deleted for fileId: $fileId")
                                     onComplete(true, "File deleted successfully")
                                 }
                                 .addOnFailureListener { e ->
-                                    Log.e(TAG, "❌ Failed to delete Firestore document: ${e.message}")
+                                    LogRecorder.logError(TAG, "Failed to delete Firestore document for fileId $fileId: ${e.message}")
                                     onComplete(false, e.message)
                                 }
                         }
                     }
                 } else {
-                    Log.e(TAG, "❌ Document not found for deletion: $fileId")
+                    LogRecorder.logError(TAG, "Document not found for deletion: $fileId")
                     onComplete(false, "Document not found")
                 }
             }
             .addOnFailureListener { e ->
-                Log.e(TAG, "❌ Firestore fetch failed during delete: ${e.message}")
+                LogRecorder.logError(TAG, "Firestore fetch failed during delete for fileId $fileId: ${e.message}")
                 onComplete(false, e.message)
             }
     }
 
     private fun uploadToDrive(file: JavaFile, fileName: String, keyFileName: String, folderId: String): String {
+        LogRecorder.logInfo(TAG, "Initializing Drive service using key '$keyFileName' for file '$fileName'")
         val credentialsStream = getCredentialsStream(keyFileName)
         val credentials = GoogleCredentials.fromStream(credentialsStream)
             .createScoped(listOf("https://www.googleapis.com/auth/drive.file"))
@@ -223,6 +225,7 @@ class FirebaseVaultUploader(private val context: Context) {
             .setFields("id")
             .execute()
 
+        LogRecorder.logSuccess(TAG, "Drive upload executed successfully. File ID: ${uploadedFile.id}")
         return uploadedFile.id
     }
 

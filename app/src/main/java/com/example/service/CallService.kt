@@ -5,6 +5,7 @@ import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.util.Log
+import com.example.utils.LogRecorder
 
 class CallService : InCallService() {
 
@@ -19,20 +20,20 @@ class CallService : InCallService() {
 
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
-        Log.d(TAG, "onCallAdded: $call")
+        LogRecorder.logInfo(TAG, "onCallAdded: $call (state=${call.state})")
         currentCall = call
         inCallServiceInstance = this
 
         call.registerCallback(object : Call.Callback() {
             override fun onStateChanged(call: Call, state: Int) {
                 super.onStateChanged(call, state)
-                Log.d(TAG, "Call state changed: $state")
+                LogRecorder.logInfo(TAG, "Call state changed: state=$state")
                 onCallStateChangedListener?.invoke(call, state)
             }
 
             override fun onDetailsChanged(call: Call, details: Call.Details) {
                 super.onDetailsChanged(call, details)
-                Log.d(TAG, "Call details changed: $details")
+                LogRecorder.logDebug(TAG, "Call details changed: handle=${details.handle}")
             }
         })
 
@@ -41,7 +42,7 @@ class CallService : InCallService() {
 
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
-        Log.d(TAG, "onCallRemoved: $call")
+        LogRecorder.logInfo(TAG, "onCallRemoved: $call")
         if (currentCall == call) {
             currentCall = null
             onCallStateChangedListener?.invoke(null, Call.STATE_DISCONNECTED)
@@ -50,23 +51,28 @@ class CallService : InCallService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        LogRecorder.logInfo(TAG, "CallService destroyed")
         inCallServiceInstance = null
         currentCall = null
     }
 
     fun endCurrentCall() {
+        LogRecorder.logInfo(TAG, "endCurrentCall invoked")
         currentCall?.disconnect()
     }
 
     fun answerCurrentCall() {
+        LogRecorder.logInfo(TAG, "answerCurrentCall invoked")
         currentCall?.answer(0)
     }
 
     fun toggleMute(muted: Boolean) {
+        LogRecorder.logInfo(TAG, "toggleMute: $muted")
         setMuted(muted)
     }
 
     fun toggleSpeaker(speakerOn: Boolean) {
+        LogRecorder.logInfo(TAG, "toggleSpeaker: $speakerOn")
         if (speakerOn) {
             setAudioRoute(CallAudioState.ROUTE_SPEAKER)
         } else {

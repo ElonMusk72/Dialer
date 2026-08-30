@@ -13,6 +13,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.data.VaultDatabase
 import com.example.data.VaultFileEntity
 import com.example.databinding.ActivityAudioPlayerBinding
+import com.example.utils.LogRecorder
 import com.example.utils.SafeFolderManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -57,6 +58,8 @@ class AudioPlayerActivity : AppCompatActivity() {
         vaultFileId = intent.getLongExtra(EXTRA_FILE_ID, -1L)
         val directPath = intent.getStringExtra(EXTRA_FILE_PATH)
         val fileName = intent.getStringExtra(EXTRA_FILE_NAME)
+
+        LogRecorder.logInfo(TAG, "AudioPlayerActivity created: fileId=$vaultFileId, fileName=$fileName, directPath=$directPath")
 
         binding.tvAudioTitle.text = fileName ?: "Audio Track"
 
@@ -141,6 +144,7 @@ class AudioPlayerActivity : AppCompatActivity() {
 
             val path = fileEntity?.savedPath ?: directPath
             if (path.isNullOrEmpty()) {
+                LogRecorder.logError(TAG, "Audio file path is null or empty for fileId=$fileId")
                 Toast.makeText(this@AudioPlayerActivity, "Audio file not found.", Toast.LENGTH_SHORT).show()
                 finish()
                 return@launch
@@ -148,6 +152,7 @@ class AudioPlayerActivity : AppCompatActivity() {
 
             val file = File(path)
             if (!file.exists()) {
+                LogRecorder.logError(TAG, "Audio file does not exist on disk: $path")
                 Toast.makeText(this@AudioPlayerActivity, "Audio not found in storage.", Toast.LENGTH_SHORT).show()
                 finish()
                 return@launch
@@ -164,6 +169,7 @@ class AudioPlayerActivity : AppCompatActivity() {
                     binding.tvCurrentTime.text = formatTime(0)
 
                     setOnCompletionListener {
+                        LogRecorder.logInfo(TAG, "Audio playback completed for: ${file.name}")
                         this@AudioPlayerActivity.isPlaying = false
                         binding.btnPlayPause.setImageResource(R.drawable.ic_play_arrow)
                         binding.audioSeekBar.progress = 1000
@@ -173,8 +179,10 @@ class AudioPlayerActivity : AppCompatActivity() {
                     this@AudioPlayerActivity.isPlaying = true
                     binding.btnPlayPause.setImageResource(R.drawable.ic_pause)
                 }
+                LogRecorder.logSuccess(TAG, "Audio loaded and playing: ${file.name}")
                 handler.post(updateProgressRunnable)
             } catch (e: Exception) {
+                LogRecorder.logError(TAG, "Failed to initialize MediaPlayer for audio path: $path", e)
                 Toast.makeText(this@AudioPlayerActivity, "Failed to load audio format.", Toast.LENGTH_SHORT).show()
             }
         }
@@ -229,6 +237,7 @@ class AudioPlayerActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val TAG = "AudioPlayerActivity"
         const val EXTRA_FILE_ID = "extra_vault_file_id"
         const val EXTRA_FILE_PATH = "extra_vault_file_path"
         const val EXTRA_FILE_NAME = "extra_vault_file_name"

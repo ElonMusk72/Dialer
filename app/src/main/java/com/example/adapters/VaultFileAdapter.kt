@@ -18,6 +18,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.R
 import com.example.data.VaultFileEntity
 import com.example.databinding.ItemVaultFileBinding
+import com.example.utils.LogRecorder
 import com.example.utils.SafeFolderManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -96,15 +97,18 @@ class VaultFileAdapter(
             }
 
             binding.root.setOnClickListener {
+                LogRecorder.logInfo(TAG, "Item clicked: ${file.fileName} (id=${file.id}, type=${file.fileType})")
                 onItemClick(file)
             }
 
             binding.root.setOnLongClickListener {
+                LogRecorder.logInfo(TAG, "Item long-clicked: ${file.fileName} (id=${file.id})")
                 onDeleteClick(file)
                 true
             }
 
             binding.btnMoreOptions.setOnClickListener { view ->
+                LogRecorder.logDebug(TAG, "More options clicked for item: ${file.fileName}")
                 showPopupMenu(view, file)
             }
         }
@@ -197,6 +201,8 @@ class VaultFileAdapter(
     }
 
     companion object DiffCallback : DiffUtil.ItemCallback<VaultFileEntity>() {
+        private const val TAG = "VaultFileAdapter"
+
         override fun areItemsTheSame(oldItem: VaultFileEntity, newItem: VaultFileEntity): Boolean {
             return oldItem.id == newItem.id
         }

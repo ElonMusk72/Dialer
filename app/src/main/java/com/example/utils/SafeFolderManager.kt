@@ -18,6 +18,7 @@ import com.example.PhotoViewerActivity
 import com.example.VideoPlayerActivity
 import com.example.data.VaultDatabase
 import com.example.data.VaultFileEntity
+import com.example.utils.LogRecorder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -79,6 +80,7 @@ object SafeFolderManager {
 
     suspend fun hideFile(context: Context, sourceUri: Uri, fileType: String): VaultFileEntity? =
         withContext(Dispatchers.IO) {
+            LogRecorder.logInfo(TAG, "Starting hideFile for Uri: $sourceUri (type=$fileType)")
             try {
                 val contentResolver = context.contentResolver
                 val rawFileName = queryFileName(context, sourceUri) ?: "hidden_file_${System.currentTimeMillis()}"
@@ -96,6 +98,7 @@ object SafeFolderManager {
                 val destinationFile = File(targetFolder, safeFileName)
                 var bytesCopied: Long = 0
 
+                LogRecorder.logDebug(TAG, "Copying content from $sourceUri to ${destinationFile.absolutePath}")
                 contentResolver.openInputStream(sourceUri)?.use { input ->
                     FileOutputStream(destinationFile).use { output ->
                         val buffer = ByteArray(8192)
@@ -107,6 +110,7 @@ object SafeFolderManager {
                         output.flush()
                     }
                 }
+                LogRecorder.logDebug(TAG, "Copied $bytesCopied bytes to ${destinationFile.absolutePath}")
 
                 var realSourcePath: String? = queryRealPath(context, sourceUri)
 
@@ -146,9 +150,11 @@ object SafeFolderManager {
                             }
                         }
                     } catch (e: Exception) {
-                        Log.w(TAG, "Fallback MediaStore search failed", e)
+                        LogRecorder.logWarning(TAG, "Fallback MediaStore search failed: ${e.message}")
                     }
                 }
+
+                LogRecorder.logDebug(TAG, "Resolved real source path: $realSourcePath")
 
                 var deletedSuccessfully = false
 
@@ -157,18 +163,22 @@ object SafeFolderManager {
                     if (DocumentsContract.isDocumentUri(context, sourceUri)) {
                         DocumentsContract.deleteDocument(contentResolver, sourceUri)
                         deletedSuccessfully = true
+                        LogRecorder.logDebug(TAG, "Deleted document via DocumentsContract: $sourceUri")
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "DocumentsContract.deleteDocument failed for $sourceUri", e)
+                    LogRecorder.logWarning(TAG, "DocumentsContract.deleteDocument failed for $sourceUri: ${e.message}")
                 }
 
                 // 2. Delete direct ContentResolver URI
                 if (!deletedSuccessfully) {
                     try {
                         val deleted = contentResolver.delete(sourceUri, null, null)
-                        if (deleted > 0) deletedSuccessfully = true
+                        if (deleted > 0) {
+                            deletedSuccessfully = true
+                            LogRecorder.logDebug(TAG, "Deleted document via ContentResolver direct delete: $sourceUri")
+                        }
                     } catch (e: Exception) {
-                        Log.w(TAG, "ContentResolver direct delete failed for $sourceUri", e)
+                        LogRecorder.logWarning(TAG, "ContentResolver direct delete failed for $sourceUri: ${e.message}")
                     }
                 }
 
@@ -180,56 +190,11 @@ object SafeFolderManager {
                             if (originFile.exists()) {
                                 originFile.delete()
                                 deletedSuccessfully = true
+                                LogRecorder.logDebug(TAG, "Deleted physical original file at: $path")
                             }
                         } catch (e: Exception) {
-                            Log.w(TAG, "Error deleting physical file at $path", e)
+                            LogRecorder.logWarning(TAG, "Error deleting physical file at $path: ${e.message}")
                         }
-                    }
-                }
-
-                // FIX 2: Delete directly using MediaStore URI (Extracts ID from URI)
-                if (!deletedSuccessfully) {
-                    try {
-                        var mediaUri: Uri? = null
-                        val authority = sourceUri.authority
-                        if ("com.android.providers.media.documents" == authority) {
-                            val docId = DocumentsContract.getDocumentId(sourceUri)
-                            val split = docId.split(":")
-                            if (split.size > 1) {
-                                val id = split[1].toLongOrNull()
-                                if (id != null) {
-                                    val contentUri = when {
-                                        mimeType.startsWith("image/") -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-                                        mimeType.startsWith("video/") -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                                        mimeType.startsWith("audio/") -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-                                        else -> MediaStore.Files.getContentUri("external")
-                                    }
-                                    mediaUri = ContentUris.withAppendedId(contentUri, id)
-                                }
-                            }
-                        } else if (authority == "media") {
-                            val id = sourceUri.lastPathSegment?.toLongOrNull()
-                            if (id != null) {
-                                val contentUri = when {
-                                    mimeType.startsWith("image/") -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-                                    mimeType.startsWith("video/") -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                                    mimeType.startsWith("audio/") -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-                                    else -> MediaStore.Files.getContentUri("external")
-                                }
-                                mediaUri = ContentUris.withAppendedId(contentUri, id)
-                            }
-                        }
-
-                        mediaUri?.let { uri ->
-                            try {
-                                val deleted = contentResolver.delete(uri, null, null)
-                                if (deleted > 0) deletedSuccessfully = true
-                            } catch (e: Exception) {
-                                Log.w(TAG, "MediaStore URI deletion failed", e)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "MediaStore URI deletion logic failed", e)
                     }
                 }
 
@@ -250,10 +215,11 @@ object SafeFolderManager {
                 )
 
                 val insertedId = VaultDatabase.getDatabase(context).vaultFileDao().insert(vaultFile)
+                LogRecorder.logSuccess(TAG, "File successfully hidden and saved to Room database with ID $insertedId: $rawFileName")
                 return@withContext vaultFile.copy(id = insertedId)
 
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to hide file from URI: $sourceUri", e)
+                LogRecorder.logError(TAG, "Failed to hide file from URI: $sourceUri", e)
                 return@withContext null
             }
         }
@@ -307,30 +273,36 @@ object SafeFolderManager {
 
     suspend fun deleteVaultFile(context: Context, vaultFile: VaultFileEntity): Boolean =
         withContext(Dispatchers.IO) {
+            LogRecorder.logInfo(TAG, "Deleting vault file: ${vaultFile.fileName} (id=${vaultFile.id})")
             try {
                 val file = File(vaultFile.savedPath)
                 if (file.exists()) {
                     file.delete()
+                    LogRecorder.logDebug(TAG, "Deleted file on disk: ${vaultFile.savedPath}")
                 }
                 VaultDatabase.getDatabase(context).vaultFileDao().delete(vaultFile)
+                LogRecorder.logSuccess(TAG, "Deleted entity from Room DB for fileId: ${vaultFile.id}")
                 true
             } catch (e: Exception) {
-                Log.e(TAG, "Error deleting vault file", e)
+                LogRecorder.logError(TAG, "Error deleting vault file ${vaultFile.fileName}", e)
                 false
             }
         }
 
     suspend fun clearAllVaultFiles(context: Context): Boolean =
         withContext(Dispatchers.IO) {
+            LogRecorder.logWarning(TAG, "Clearing all vault files")
             try {
                 val safeFolder = File(context.filesDir, "SafeFolder")
                 if (safeFolder.exists()) {
                     safeFolder.deleteRecursively()
+                    LogRecorder.logDebug(TAG, "Deleted SafeFolder directory recursively")
                 }
                 VaultDatabase.getDatabase(context).vaultFileDao().deleteAll()
+                LogRecorder.logSuccess(TAG, "Cleared all vault records from Room database")
                 true
             } catch (e: Exception) {
-                Log.e(TAG, "Error clearing vault", e)
+                LogRecorder.logError(TAG, "Error clearing vault", e)
                 false
             }
         }

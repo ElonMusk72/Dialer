@@ -10,6 +10,7 @@ import com.example.R
 import com.example.data.ContactItem
 import com.example.databinding.ItemContactBinding
 import com.example.utils.DialerUtils
+import com.example.utils.LogRecorder
 
 class ContactAdapter(
     private val onItemClick: (ContactItem) -> Unit,
@@ -44,12 +45,23 @@ class ContactAdapter(
             holder.binding.btnFavorite.setColorFilter(ContextCompat.getColor(context, R.color.text_secondary))
         }
 
-        holder.itemView.setOnClickListener { onItemClick(item) }
-        holder.binding.btnCall.setOnClickListener { onCallClick(item) }
-        holder.binding.btnFavorite.setOnClickListener { onFavoriteClick(item) }
+        holder.itemView.setOnClickListener {
+            LogRecorder.logDebug(TAG, "Contact item clicked: ${item.name}")
+            onItemClick(item)
+        }
+        holder.binding.btnCall.setOnClickListener {
+            LogRecorder.logDebug(TAG, "Call clicked for contact: ${item.name}")
+            onCallClick(item)
+        }
+        holder.binding.btnFavorite.setOnClickListener {
+            LogRecorder.logDebug(TAG, "Favorite toggle clicked for contact: ${item.name}")
+            onFavoriteClick(item)
+        }
     }
 
     companion object DiffCallback : DiffUtil.ItemCallback<ContactItem>() {
+        private const val TAG = "ContactAdapter"
+
         override fun areItemsTheSame(oldItem: ContactItem, newItem: ContactItem): Boolean {
             return oldItem.id == newItem.id
         }

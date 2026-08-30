@@ -16,12 +16,17 @@ import com.example.adapters.CallLogAdapter
 import com.example.data.CallLogEntity
 import com.example.databinding.FragmentCallLogBinding
 import com.example.utils.DialerUtils
+import com.example.utils.LogRecorder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class CallLogFragment : Fragment() {
+
+    companion object {
+        private const val TAG = "CallLogFragment"
+    }
 
     private var _binding: FragmentCallLogBinding? = null
     private val binding get() = _binding!!
@@ -41,6 +46,7 @@ class CallLogFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        LogRecorder.logInfo(TAG, "CallLogFragment view created")
         setupRecyclerView()
         setupFiltersAndActions()
         ensureSampleLogsIfEmpty()
@@ -82,10 +88,12 @@ class CallLogFragment : Fragment() {
         }
 
         binding.btnClearLog.setOnClickListener {
+            LogRecorder.logWarning(TAG, "User clicked Clear Call Log button")
             AlertDialog.Builder(requireContext())
                 .setTitle("Clear Call Log")
                 .setMessage("Are you sure you want to clear all call history?")
                 .setPositiveButton("Clear") { _, _ ->
+                    LogRecorder.logWarning(TAG, "User confirmed clearing call logs")
                     clearAllLogs()
                 }
                 .setNegativeButton("Cancel", null)

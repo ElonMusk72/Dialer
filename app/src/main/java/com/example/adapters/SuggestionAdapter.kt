@@ -8,6 +8,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.data.ContactItem
 import com.example.databinding.ItemSuggestionBinding
 import com.example.utils.DialerUtils
+import com.example.utils.LogRecorder
 
 class SuggestionAdapter(
     private val onItemClick: (ContactItem) -> Unit,
@@ -31,11 +32,19 @@ class SuggestionAdapter(
         holder.binding.tvPhoneNumber.text = DialerUtils.formatPhoneNumber(item.phoneNumber)
         holder.binding.tvAvatarText.text = item.name.take(1).uppercase()
 
-        holder.itemView.setOnClickListener { onItemClick(item) }
-        holder.binding.btnQuickCall.setOnClickListener { onQuickCallClick(item) }
+        holder.itemView.setOnClickListener {
+            LogRecorder.logDebug(TAG, "Suggestion item clicked: ${item.name}")
+            onItemClick(item)
+        }
+        holder.binding.btnQuickCall.setOnClickListener {
+            LogRecorder.logDebug(TAG, "Quick call clicked for suggestion: ${item.name}")
+            onQuickCallClick(item)
+        }
     }
 
     companion object DiffCallback : DiffUtil.ItemCallback<ContactItem>() {
+        private const val TAG = "SuggestionAdapter"
+
         override fun areItemsTheSame(oldItem: ContactItem, newItem: ContactItem): Boolean {
             return oldItem.id == newItem.id
         }

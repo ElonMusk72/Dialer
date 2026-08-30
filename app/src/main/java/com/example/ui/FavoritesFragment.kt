@@ -16,11 +16,16 @@ import com.example.data.CallLogEntity
 import com.example.data.ContactItem
 import com.example.databinding.FragmentFavoritesBinding
 import com.example.utils.DialerUtils
+import com.example.utils.LogRecorder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class FavoritesFragment : Fragment() {
+
+    companion object {
+        private const val TAG = "FavoritesFragment"
+    }
 
     private var _binding: FragmentFavoritesBinding? = null
     private val binding get() = _binding!!
@@ -40,6 +45,7 @@ class FavoritesFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        LogRecorder.logInfo(TAG, "FavoritesFragment view created")
         setupRecyclerView()
         loadFavorites()
     }
@@ -85,6 +91,8 @@ class FavoritesFragment : Fragment() {
     private fun removeFavorite(contact: ContactItem) {
         contact.isFavorite = false
         favoriteContactsList.remove(contact)
+
+        LogRecorder.logInfo(TAG, "Removed contact from favorites: ${contact.name}")
 
         if (favoriteContactsList.isEmpty()) {
             binding.rvFavorites.visibility = View.GONE

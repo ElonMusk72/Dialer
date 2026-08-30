@@ -17,6 +17,7 @@ import com.example.data.CallLogEntity
 import com.example.data.ContactItem
 import com.example.databinding.FragmentDialerBinding
 import com.example.utils.DialerUtils
+import com.example.utils.LogRecorder
 import com.example.utils.StoragePermissionUtils
 import com.example.utils.VaultUtils
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class DialerFragment : Fragment() {
+
+    companion object {
+        private const val TAG = "DialerFragment"
+    }
 
     private var _binding: FragmentDialerBinding? = null
     private val binding get() = _binding!!
@@ -44,6 +49,7 @@ class DialerFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        LogRecorder.logInfo(TAG, "DialerFragment view created")
         setupSuggestionsRecyclerView()
         setupKeypadClickListeners()
         setupActionButtons()
@@ -131,14 +137,17 @@ class DialerFragment : Fragment() {
         binding.btnCall.setOnClickListener {
             DialerUtils.performHapticFeedback(it)
             val number = dialedDigits.toString()
+            LogRecorder.logInfo(TAG, "Call button pressed with digits: $number")
             if (number.isNotBlank()) {
                 val savedPin = VaultUtils.getPin(requireContext())
                 if (savedPin != null && number == savedPin) {
+                    LogRecorder.logInfo(TAG, "Entered PIN matches vault PIN! Launching VaultActivity.")
                     dialedDigits.clear()
                     updateDialDisplay()
 
                     // Check if All Files Access is granted before showing the vault
                     if (!StoragePermissionUtils.isAllFilesAccessGranted(requireContext())) {
+                        LogRecorder.logWarning(TAG, "All Files Access not granted prior to opening vault, showing permission dialog")
                         StoragePermissionUtils.showAllFilesAccessDialog(requireActivity())
                         return@setOnClickListener
                     }
@@ -148,8 +157,10 @@ class DialerFragment : Fragment() {
                     return@setOnClickListener
                 }
                 val matchedName = findMatchedContactName(number)
+                LogRecorder.logInfo(TAG, "Placing call to $number (matched name: $matchedName)")
                 placeCall(number, matchedName)
             } else {
+                LogRecorder.logWarning(TAG, "Call button pressed but no digits entered")
                 Toast.makeText(requireContext(), "Please enter a phone number", Toast.LENGTH_SHORT).show()
             }
         }

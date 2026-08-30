@@ -8,6 +8,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.data.ContactItem
 import com.example.databinding.ItemFavoriteBinding
 import com.example.utils.DialerUtils
+import com.example.utils.LogRecorder
 
 class FavoriteAdapter(
     private val onItemClick: (ContactItem) -> Unit,
@@ -32,12 +33,23 @@ class FavoriteAdapter(
         holder.binding.tvPhoneNumber.text = DialerUtils.formatPhoneNumber(item.phoneNumber)
         holder.binding.tvAvatarText.text = item.name.take(1).uppercase()
 
-        holder.itemView.setOnClickListener { onItemClick(item) }
-        holder.binding.btnFavoriteCall.setOnClickListener { onCallClick(item) }
-        holder.binding.btnRemoveFavorite.setOnClickListener { onRemoveClick(item) }
+        holder.itemView.setOnClickListener {
+            LogRecorder.logDebug(TAG, "Favorite item clicked: ${item.name}")
+            onItemClick(item)
+        }
+        holder.binding.btnFavoriteCall.setOnClickListener {
+            LogRecorder.logDebug(TAG, "Favorite call button clicked: ${item.name}")
+            onCallClick(item)
+        }
+        holder.binding.btnRemoveFavorite.setOnClickListener {
+            LogRecorder.logDebug(TAG, "Favorite remove button clicked: ${item.name}")
+            onRemoveClick(item)
+        }
     }
 
     companion object DiffCallback : DiffUtil.ItemCallback<ContactItem>() {
+        private const val TAG = "FavoriteAdapter"
+
         override fun areItemsTheSame(oldItem: ContactItem, newItem: ContactItem): Boolean {
             return oldItem.id == newItem.id
         }

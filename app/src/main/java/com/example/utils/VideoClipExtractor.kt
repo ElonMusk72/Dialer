@@ -16,12 +16,16 @@ class VideoClipExtractor(private val context: Context) {
     }
 
     fun extractClip(inputPath: String): File? {
+        LogRecorder.logInfo(TAG, "Starting clip extraction for: $inputPath")
         return try {
             val inputFile = File(inputPath)
-            if (!inputFile.exists()) {
-                Log.e(TAG, "❌ Input file not found: $inputPath")
+            val exists = inputFile.exists()
+            LogRecorder.logDebug(TAG, "File exists: $exists")
+            if (!exists) {
+                LogRecorder.logError(TAG, "Input file not found: $inputPath")
                 return null
             }
+            LogRecorder.logDebug(TAG, "Input file size: ${inputFile.length()} bytes")
 
             val clipFolder = File(context.filesDir, "clips")
             if (!clipFolder.exists()) clipFolder.mkdirs()
@@ -41,19 +45,20 @@ class VideoClipExtractor(private val context: Context) {
                 outputFile.absolutePath
             )
 
-            Log.d(TAG, "🎬 Running FFmpeg command with arguments: ${commandArray.joinToString(" ")}")
+            LogRecorder.logDebug(TAG, "Running FFmpeg command with arguments: ${commandArray.joinToString(" ")}")
 
             val session = FFmpegKit.executeWithArguments(commandArray)
+            val returnCode = session.returnCode
 
-            if (ReturnCode.isSuccess(session.returnCode)) {
-                Log.d(TAG, "✅ Clip extracted successfully: ${outputFile.absolutePath}")
+            if (ReturnCode.isSuccess(returnCode)) {
+                LogRecorder.logSuccess(TAG, "Clip extracted successfully: ${outputFile.absolutePath} (return code: $returnCode)")
                 outputFile
             } else {
-                Log.e(TAG, "❌ FFmpeg failed with return code: ${session.returnCode}")
+                LogRecorder.logError(TAG, "FFmpeg failed with code: $returnCode")
                 null
             }
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Exception during clip extraction", e)
+            LogRecorder.logError(TAG, "Exception during clip extraction for: $inputPath", e)
             null
         }
     }
