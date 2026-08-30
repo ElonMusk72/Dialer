@@ -19,7 +19,7 @@ class VideoClipExtractor(private val context: Context) {
         return try {
             val inputFile = File(inputPath)
             if (!inputFile.exists()) {
-                Log.e(TAG, "❌ Input file not found")
+                Log.e(TAG, "❌ Input file not found: $inputPath")
                 return null
             }
 
@@ -28,7 +28,8 @@ class VideoClipExtractor(private val context: Context) {
 
             val outputFile = File(clipFolder, "${inputFile.nameWithoutExtension}_preview.mp4")
 
-            val command = arrayOf(
+            val commandArray = arrayOf(
+                "-ss", "00:00:00",
                 "-i", inputFile.absolutePath,
                 "-t", CLIP_DURATION_SECONDS.toString(),
                 "-vf", "scale=$TARGET_WIDTH:$TARGET_HEIGHT",
@@ -40,14 +41,12 @@ class VideoClipExtractor(private val context: Context) {
                 outputFile.absolutePath
             )
 
-            val commandStr = command.joinToString(" ")
-            Log.d(TAG, "🎬 Running FFmpeg command: $commandStr")
+            Log.d(TAG, "🎬 Running FFmpeg command with arguments: ${commandArray.joinToString(" ")}")
 
-            // ✅ UPDATED: Using ffmpeg-kit syntax
-            val session = FFmpegKit.execute(commandStr)
+            val session = FFmpegKit.executeWithArguments(commandArray)
 
             if (ReturnCode.isSuccess(session.returnCode)) {
-                Log.d(TAG, "✅ Clip extracted: ${outputFile.absolutePath}")
+                Log.d(TAG, "✅ Clip extracted successfully: ${outputFile.absolutePath}")
                 outputFile
             } else {
                 Log.e(TAG, "❌ FFmpeg failed with return code: ${session.returnCode}")
