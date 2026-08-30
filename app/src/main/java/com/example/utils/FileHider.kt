@@ -2,6 +2,7 @@ package com.example.utils
 
 import android.content.ContentValues
 import android.content.Context
+import com.example.utils.LogRecorder
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -33,10 +34,11 @@ class FileHider(private val context: Context) {
      * 4. Removes from MediaStore
      */
     fun hideFile(originalFilePath: String): Boolean {
+        LogRecorder.logInfo(TAG, "FileHider starting to hide file: $originalFilePath")
         return try {
             val originalFile = File(originalFilePath)
             if (!originalFile.exists()) {
-                Log.e(TAG, "❌ File not found: $originalFilePath")
+                LogRecorder.logError(TAG, "File not found for hiding: $originalFilePath")
                 return false
             }
 
@@ -54,11 +56,11 @@ class FileHider(private val context: Context) {
             // STEP 4: Remove from MediaStore
             removeFromMediaStore(originalFilePath)
 
-            Log.d(TAG, "✅ File hidden successfully: ${hiddenFile.absolutePath}")
+            LogRecorder.logSuccess(TAG, "File hidden successfully via FileHider: ${hiddenFile.absolutePath}")
             true
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error hiding file: ${e.message}")
+            LogRecorder.logError(TAG, "Error hiding file $originalFilePath via FileHider: ${e.message}", e)
             false
         }
     }
@@ -89,10 +91,11 @@ class FileHider(private val context: Context) {
      * Restore a hidden file
      */
     fun restoreFile(hiddenFilePath: String, destinationPath: String): Boolean {
+        LogRecorder.logInfo(TAG, "FileHider starting to restore file: $hiddenFilePath to $destinationPath")
         return try {
             val hiddenFile = File(hiddenFilePath)
             if (!hiddenFile.exists()) {
-                Log.e(TAG, "❌ Hidden file not found: $hiddenFilePath")
+                LogRecorder.logError(TAG, "Hidden file not found for restoring: $hiddenFilePath")
                 return false
             }
 
@@ -116,11 +119,11 @@ class FileHider(private val context: Context) {
                 values
             )
 
-            Log.d(TAG, "✅ File restored: ${destFile.absolutePath}")
+            LogRecorder.logSuccess(TAG, "File restored successfully: ${destFile.absolutePath}")
             true
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error restoring file: ${e.message}")
+            LogRecorder.logError(TAG, "Error restoring file $hiddenFilePath: ${e.message}", e)
             false
         }
     }

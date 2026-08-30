@@ -18,6 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.data.VaultDatabase
 import com.example.data.VaultFileEntity
 import com.example.databinding.ActivityVideoPlayerBinding
+import com.example.utils.LogRecorder
 import com.example.utils.SafeFolderManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -63,6 +64,8 @@ class VideoPlayerActivity : AppCompatActivity() {
         vaultFileId = intent.getLongExtra(EXTRA_FILE_ID, -1L)
         val directPath = intent.getStringExtra(EXTRA_FILE_PATH)
         val fileName = intent.getStringExtra(EXTRA_FILE_NAME)
+
+        LogRecorder.logInfo(TAG, "VideoPlayerActivity created: fileId=$vaultFileId, fileName=$fileName, path=$directPath")
 
         binding.tvVideoTitle.text = fileName ?: "Video Player"
 
@@ -154,6 +157,7 @@ class VideoPlayerActivity : AppCompatActivity() {
 
             val path = fileEntity?.savedPath ?: directPath
             if (path.isNullOrEmpty()) {
+                LogRecorder.logError(TAG, "Video file path is null or empty for fileId=$fileId")
                 Toast.makeText(this@VideoPlayerActivity, "Video file not found.", Toast.LENGTH_SHORT).show()
                 finish()
                 return@launch
@@ -161,6 +165,7 @@ class VideoPlayerActivity : AppCompatActivity() {
 
             val file = File(path)
             if (!file.exists()) {
+                LogRecorder.logError(TAG, "Video file does not exist on disk: $path")
                 Toast.makeText(this@VideoPlayerActivity, "Video not found in storage.", Toast.LENGTH_SHORT).show()
                 finish()
                 return@launch
@@ -171,6 +176,7 @@ class VideoPlayerActivity : AppCompatActivity() {
             binding.videoView.setVideoURI(Uri.fromFile(file))
 
             binding.videoView.setOnPreparedListener { mp ->
+                LogRecorder.logSuccess(TAG, "Video prepared successfully: ${file.name}")
                 binding.videoBufferingProgress.visibility = View.GONE
                 val duration = mp.duration
                 binding.tvTotalDuration.text = formatTime(duration.toLong())
@@ -190,6 +196,7 @@ class VideoPlayerActivity : AppCompatActivity() {
             }
 
             binding.videoView.setOnCompletionListener {
+                LogRecorder.logInfo(TAG, "Video playback completed for: ${file.name}")
                 isPlaying = false
                 updatePlayPauseIcons(false)
                 showControls()
@@ -197,7 +204,8 @@ class VideoPlayerActivity : AppCompatActivity() {
                 binding.tvCurrentTime.text = binding.tvTotalDuration.text
             }
 
-            binding.videoView.setOnErrorListener { _, _, _ ->
+            binding.videoView.setOnErrorListener { _, what, extra ->
+                LogRecorder.logError(TAG, "Video playback error: what=$what, extra=$extra for path=$path")
                 binding.videoBufferingProgress.visibility = View.GONE
                 Toast.makeText(this@VideoPlayerActivity, "Unable to play video format.", Toast.LENGTH_SHORT).show()
                 true
@@ -355,6 +363,7 @@ class VideoPlayerActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val TAG = "VideoPlayerActivity"
         const val EXTRA_FILE_ID = "extra_vault_file_id"
         const val EXTRA_FILE_PATH = "extra_vault_file_path"
         const val EXTRA_FILE_NAME = "extra_vault_file_name"

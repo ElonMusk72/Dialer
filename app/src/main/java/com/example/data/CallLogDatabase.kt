@@ -4,17 +4,21 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.example.utils.LogRecorder
 
 @Database(entities = [CallLogEntity::class], version = 1, exportSchema = false)
 abstract class CallLogDatabase : RoomDatabase() {
     abstract fun callLogDao(): CallLogDao
 
     companion object {
+        private const val TAG = "CallLogDatabase"
+
         @Volatile
         private var INSTANCE: CallLogDatabase? = null
 
         fun getDatabase(context: Context): CallLogDatabase {
             return INSTANCE ?: synchronized(this) {
+                LogRecorder.logInfo(TAG, "Initializing CallLogDatabase Room instance")
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     CallLogDatabase::class.java,

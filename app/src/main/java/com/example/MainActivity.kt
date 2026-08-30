@@ -30,6 +30,7 @@ import com.example.ui.ContactsFragment
 import com.example.ui.DialerFragment
 import com.example.ui.FavoritesFragment
 import com.example.utils.DialerUtils
+import com.example.utils.LogRecorder
 import com.example.utils.StoragePermissionUtils
 import com.example.utils.VaultUtils
 import kotlinx.coroutines.CoroutineScope
@@ -40,6 +41,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
+
+    companion object {
+        private const val TAG = "MainActivity"
+    }
 
     private lateinit var binding: ActivityMainBinding
     val database: CallLogDatabase by lazy { CallLogDatabase.getDatabase(this) }
@@ -83,6 +88,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        LogRecorder.logInfo(TAG, "MainActivity created")
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -139,19 +146,23 @@ class MainActivity : AppCompatActivity() {
      * 5. PIN Setup Screen (if not configured)
      */
     private fun startPermissionFlow() {
+        LogRecorder.logInfo(TAG, "Starting permission flow")
         if (!StoragePermissionUtils.isAllFilesAccessGranted(this)) {
+            LogRecorder.logWarning(TAG, "All Files Access not granted, prompting user")
             isWaitingForAllFilesAccess = true
             StoragePermissionUtils.showAllFilesAccessDialog(
                 activity = this,
                 onGrantClicked = {
-                    // When user returns from Settings, onResume() continues the flow
+                    LogRecorder.logInfo(TAG, "User agreed to grant All Files Access")
                 },
                 onDismissed = {
+                    LogRecorder.logWarning(TAG, "User dismissed All Files Access dialog")
                     isWaitingForAllFilesAccess = false
                     requestCallLogPermission()
                 }
             )
         } else {
+            LogRecorder.logInfo(TAG, "All Files Access is already granted")
             requestCallLogPermission()
         }
     }
@@ -203,10 +214,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onPermissionsFlowCompleted() {
+        LogRecorder.logInfo(TAG, "Permissions flow completed")
         if (!VaultUtils.isPinSet(this)) {
+            LogRecorder.logInfo(TAG, "Vault PIN is not set, redirecting to PinSetupActivity")
             val intent = Intent(this, PinSetupActivity::class.java)
             startActivity(intent)
         } else {
+            LogRecorder.logInfo(TAG, "Vault PIN is set, checking default dialer status")
             checkAndPromptDefaultDialer()
         }
     }
@@ -223,6 +237,7 @@ class MainActivity : AppCompatActivity() {
 
     fun checkAndPromptDefaultDialer() {
         if (!isDefaultDialer()) {
+            LogRecorder.logInfo(TAG, "App is not default dialer, prompting user to set as default")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val roleManager = getSystemService(Context.ROLE_SERVICE) as? RoleManager
                 if (roleManager?.isRoleAvailable(RoleManager.ROLE_DIALER) == true) {
@@ -235,6 +250,8 @@ class MainActivity : AppCompatActivity() {
                 }
                 defaultDialerLauncher.launch(intent)
             }
+        } else {
+            LogRecorder.logInfo(TAG, "App is already the default dialer")
         }
     }
 
@@ -247,7 +264,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleCallStateChange(call: Call?, state: Int) {
+        LogRecorder.logDebug(TAG, "handleCallStateChange: state=$state")
         if (call == null || state == Call.STATE_DISCONNECTED) {
+            LogRecorder.logInfo(TAG, "Call disconnected or null, dismissing in-call dialog")
             callTimerJob?.cancel()
             inCallDialog?.dismiss()
             inCallDialog = null
@@ -277,12 +296,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun makeCall(phoneNumber: String, callerName: String?) {
+        LogRecorder.logInfo(TAG, "makeCall initiated for number: $phoneNumber (callerName: $callerName)")
         val savedPin = VaultUtils.getPin(this)
         val cleanNumber = phoneNumber.replace(Regex("[^0-9+*#]"), "")
         val digitsOnly = phoneNumber.replace(Regex("[^0-9]"), "")
 
         // Check if entered digits match the Secret Vault PIN
         if (savedPin != null && (phoneNumber == savedPin || cleanNumber == savedPin || digitsOnly == savedPin)) {
+            LogRecorder.logInfo(TAG, "PIN match detected in makeCall! Opening VaultActivity.")
             val intent = Intent(this, VaultActivity::class.java)
             startActivity(intent)
             return
@@ -298,9 +319,11 @@ class MainActivity : AppCompatActivity() {
         )
         lifecycleScope.launch(Dispatchers.IO) {
             database.callLogDao().insertCallLog(callLog)
+            LogRecorder.logDebug(TAG, "Logged outgoing call into database for: $phoneNumber")
         }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+            LogRecorder.logWarning(TAG, "CALL_PHONE permission not granted, requesting permission")
             callLogPermissionLauncher.launch(arrayOf(Manifest.permission.CALL_PHONE))
             return
         }
@@ -312,19 +335,22 @@ class MainActivity : AppCompatActivity() {
             try {
                 val extras = Bundle()
                 telecomManager.placeCall(uri, extras)
+                LogRecorder.logInfo(TAG, "Placed call via TelecomManager to: $cleanNumber")
                 showInCallDialog(phoneNumber, callerName)
                 return
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogRecorder.logError(TAG, "Failed to place call via TelecomManager", e)
             }
         }
 
         // Direct ACTION_CALL with custom In-Call overlay
         try {
+            LogRecorder.logInfo(TAG, "Placing call via ACTION_CALL to: $cleanNumber")
             val intent = Intent(Intent.ACTION_CALL, uri)
             startActivity(intent)
             showInCallDialog(phoneNumber, callerName)
         } catch (e: Exception) {
+            LogRecorder.logError(TAG, "Failed to launch ACTION_CALL intent", e)
             showInCallDialog(phoneNumber, callerName)
         }
     }
@@ -338,6 +364,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun showInCallDialog(phoneNumber: String, callerName: String?) {
+        LogRecorder.logInfo(TAG, "Displaying in-call dialog for: $phoneNumber")
         inCallDialog?.dismiss()
         callTimerJob?.cancel()
 
@@ -355,6 +382,7 @@ class MainActivity : AppCompatActivity() {
 
         dialogBinding.btnMute.setOnClickListener {
             isMuted = !isMuted
+            LogRecorder.logInfo(TAG, "Toggled mute state: isMuted=$isMuted")
             dialogBinding.tvMuteLabel.text = if (isMuted) getString(R.string.unmute) else getString(R.string.mute)
             dialogBinding.btnMute.isSelected = isMuted
             CallService.inCallServiceInstance?.toggleMute(isMuted)
@@ -363,6 +391,7 @@ class MainActivity : AppCompatActivity() {
 
         dialogBinding.btnSpeaker.setOnClickListener {
             isSpeakerOn = !isSpeakerOn
+            LogRecorder.logInfo(TAG, "Toggled speaker state: isSpeakerOn=$isSpeakerOn")
             dialogBinding.tvSpeakerLabel.text = if (isSpeakerOn) getString(R.string.speaker_off) else getString(R.string.speaker)
             dialogBinding.btnSpeaker.isSelected = isSpeakerOn
             CallService.inCallServiceInstance?.toggleSpeaker(isSpeakerOn)
@@ -370,6 +399,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         dialogBinding.btnEndCall.setOnClickListener {
+            LogRecorder.logInfo(TAG, "User clicked End Call button")
             CallService.inCallServiceInstance?.endCurrentCall()
             callTimerJob?.cancel()
             inCallDialog?.dismiss()

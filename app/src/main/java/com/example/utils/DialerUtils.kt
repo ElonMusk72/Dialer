@@ -20,6 +20,8 @@ import java.util.Locale
 
 object DialerUtils {
 
+    private const val TAG = "DialerUtils"
+
     /**
      * Converts letters to T9 numeric digit strings.
      */
@@ -153,6 +155,7 @@ object DialerUtils {
      * Read contacts from device or fallback to rich sample contacts.
      */
     fun loadContacts(context: Context): List<ContactItem> {
+        LogRecorder.logInfo(TAG, "Loading contacts from device/content resolver")
         val contactsList = mutableListOf<ContactItem>()
 
         if (hasContactsPermission(context)) {
@@ -202,12 +205,16 @@ object DialerUtils {
                         }
                     }
                 }
+                LogRecorder.logSuccess(TAG, "Loaded ${contactsList.size} contacts from ContentResolver")
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogRecorder.logError(TAG, "Failed to query contacts from ContentResolver", e)
             }
+        } else {
+            LogRecorder.logWarning(TAG, "READ_CONTACTS permission not granted")
         }
 
         if (contactsList.isEmpty()) {
+            LogRecorder.logInfo(TAG, "Using fallback sample contacts")
             contactsList.addAll(getSampleContacts())
         }
 

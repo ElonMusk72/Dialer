@@ -10,6 +10,7 @@ import com.example.R
 import com.example.data.CallLogEntity
 import com.example.databinding.ItemCallLogBinding
 import com.example.utils.DialerUtils
+import com.example.utils.LogRecorder
 
 class CallLogAdapter(
     private val onItemClick: (CallLogEntity) -> Unit,
@@ -62,12 +63,19 @@ class CallLogAdapter(
             }
         }
 
-        holder.itemView.setOnClickListener { onItemClick(item) }
+        holder.itemView.setOnClickListener {
+            LogRecorder.logDebug(TAG, "Call log item clicked: ${item.phoneNumber}")
+            onItemClick(item)
+        }
         holder.itemView.setOnLongClickListener {
+            LogRecorder.logDebug(TAG, "Call log item long-clicked: ${item.phoneNumber}")
             onItemLongClick(item)
             true
         }
-        holder.binding.btnCall.setOnClickListener { onCallClick(item) }
+        holder.binding.btnCall.setOnClickListener {
+            LogRecorder.logDebug(TAG, "Call button clicked for call log item: ${item.phoneNumber}")
+            onCallClick(item)
+        }
     }
 
     private fun String?.isNull_or_blank(): Boolean {
@@ -75,6 +83,8 @@ class CallLogAdapter(
     }
 
     companion object DiffCallback : DiffUtil.ItemCallback<CallLogEntity>() {
+        private const val TAG = "CallLogAdapter"
+
         override fun areItemsTheSame(oldItem: CallLogEntity, newItem: CallLogEntity): Boolean {
             return oldItem.id == newItem.id
         }

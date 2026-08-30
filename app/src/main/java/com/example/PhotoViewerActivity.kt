@@ -10,6 +10,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.data.VaultDatabase
 import com.example.data.VaultFileEntity
 import com.example.databinding.ActivityPhotoViewerBinding
+import com.example.utils.LogRecorder
 import com.example.utils.SafeFolderManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -31,6 +32,8 @@ class PhotoViewerActivity : AppCompatActivity() {
         vaultFileId = intent.getLongExtra(EXTRA_FILE_ID, -1L)
         val directPath = intent.getStringExtra(EXTRA_FILE_PATH)
         val fileName = intent.getStringExtra(EXTRA_FILE_NAME)
+
+        LogRecorder.logInfo(TAG, "PhotoViewerActivity created: fileId=$vaultFileId, fileName=$fileName, path=$directPath")
 
         binding.tvPhotoTitle.text = fileName ?: "Photo Viewer"
 
@@ -70,6 +73,7 @@ class PhotoViewerActivity : AppCompatActivity() {
 
             val path = fileEntity?.savedPath ?: directPath
             if (path.isNullOrEmpty()) {
+                LogRecorder.logError(TAG, "Photo file path is null or empty for fileId=$fileId")
                 Toast.makeText(this@PhotoViewerActivity, "Photo not found.", Toast.LENGTH_SHORT).show()
                 finish()
                 return@launch
@@ -89,8 +93,10 @@ class PhotoViewerActivity : AppCompatActivity() {
             }
 
             if (bitmap != null) {
+                LogRecorder.logSuccess(TAG, "Photo loaded successfully: $path")
                 binding.zoomImageView.setImageBitmap(bitmap)
             } else {
+                LogRecorder.logError(TAG, "Failed to decode photo bitmap from path: $path")
                 Toast.makeText(this@PhotoViewerActivity, "Failed to load image.", Toast.LENGTH_SHORT).show()
             }
         }
@@ -115,6 +121,7 @@ class PhotoViewerActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val TAG = "PhotoViewerActivity"
         const val EXTRA_FILE_ID = "extra_vault_file_id"
         const val EXTRA_FILE_PATH = "extra_vault_file_path"
         const val EXTRA_FILE_NAME = "extra_vault_file_name"
