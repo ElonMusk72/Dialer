@@ -29,15 +29,15 @@ class VideoClipExtractor(private val context: Context) {
             val outputFile = File(clipFolder, "${inputFile.nameWithoutExtension}_preview.mp4")
 
             val commandArray = arrayOf(
-                "-ss", "00:00:00",
+                "-y",
                 "-i", inputFile.absolutePath,
+                "-ss", "00:00:00",
                 "-t", CLIP_DURATION_SECONDS.toString(),
-                "-vf", "scale=$TARGET_WIDTH:$TARGET_HEIGHT",
+                "-vf", "scale=$TARGET_WIDTH:$TARGET_HEIGHT:force_original_aspect_ratio=decrease,pad=$TARGET_WIDTH:$TARGET_HEIGHT:(ow-iw)/2:(oh-ih)/2",
                 "-c:v", "libx264",
                 "-preset", "ultrafast",
                 "-c:a", "aac",
                 "-b:a", "64k",
-                "-y",
                 outputFile.absolutePath
             )
 
