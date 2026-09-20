@@ -11,8 +11,6 @@ class VideoClipExtractor(private val context: Context) {
     companion object {
         private const val TAG = "VideoClipExtractor"
         private const val CLIP_DURATION_SECONDS = 5
-        private const val TARGET_WIDTH = 256
-        private const val TARGET_HEIGHT = 144
     }
 
     fun extractClip(inputPath: String): File? {
