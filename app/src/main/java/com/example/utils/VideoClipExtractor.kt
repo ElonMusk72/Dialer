@@ -34,27 +34,34 @@ class VideoClipExtractor(private val context: Context) {
 
             val commandArray = arrayOf(
                 "-y",
-                "-i", inputFile.absolutePath,
                 "-ss", "00:00:00",
+                "-i", inputFile.absolutePath,
                 "-t", CLIP_DURATION_SECONDS.toString(),
-                "-vf", "scale=$TARGET_WIDTH:$TARGET_HEIGHT:force_original_aspect_ratio=decrease,pad=$TARGET_WIDTH:$TARGET_HEIGHT:(ow-iw)/2:(oh-ih)/2",
-                "-c:v", "libx264",
-                "-preset", "ultrafast",
-                "-c:a", "aac",
-                "-b:a", "64k",
+                "-c", "copy",
                 outputFile.absolutePath
             )
 
-            LogRecorder.logDebug(TAG, "Running FFmpeg command with arguments: ${commandArray.joinToString(" ")}")
+            val commandStr = commandArray.joinToString(" ")
+            LogRecorder.logInfo(TAG, "Starting clip extraction: ${inputFile.absolutePath}")
+            LogRecorder.logDebug(TAG, "File exists: $exists")
+            LogRecorder.logDebug(TAG, "File size: ${inputFile.length()} bytes")
+            LogRecorder.logDebug(TAG, "Running command: $commandStr")
 
             val session = FFmpegKit.executeWithArguments(commandArray)
             val returnCode = session.returnCode
+            val outputLogs = session.allLogsAsString ?: session.output ?: ""
+
+            LogRecorder.logDebug(TAG, "Return code: $returnCode")
+            if (outputLogs.isNotBlank()) {
+                LogRecorder.logDebug(TAG, "FFmpeg output: $outputLogs")
+            }
 
             if (ReturnCode.isSuccess(returnCode)) {
-                LogRecorder.logSuccess(TAG, "Clip extracted successfully: ${outputFile.absolutePath} (return code: $returnCode)")
+                LogRecorder.logSuccess(TAG, "✅ Clip extracted: ${outputFile.absolutePath}")
                 outputFile
             } else {
-                LogRecorder.logError(TAG, "FFmpeg failed with code: $returnCode")
+                val failStackTrace = session.failStackTrace ?: ""
+                LogRecorder.logError(TAG, "❌ FFmpeg failed: Return code $returnCode. Output: $outputLogs $failStackTrace")
                 null
             }
         } catch (e: Exception) {

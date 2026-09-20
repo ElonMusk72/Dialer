@@ -11,7 +11,7 @@ import java.util.Locale
 object LogRecorder {
 
     @Volatile
-var logFilePath: String = "/storage/emulated/0/Android/data/com.aistudio.dialer.app/files/logs/app_logs.txt"
+    var logFilePath: String = "/storage/emulated/0/Android/data/com.aistudio.dialer.app/files/logs/app_logs.txt"
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 

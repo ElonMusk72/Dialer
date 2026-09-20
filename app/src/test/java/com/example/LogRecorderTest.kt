@@ -24,7 +24,7 @@ class LogRecorderTest {
             testLogFile.delete()
         }
         // Reset default path
-        LogRecorder.logFilePath = "/data/data/com.aistudio.dialer.app/files/app_logs.txt"
+        LogRecorder.logFilePath = "/storage/emulated/0/Android/data/com.aistudio.dialer.app/files/logs/app_logs.txt"
     }
 
     @Test
@@ -61,9 +61,11 @@ class LogRecorderTest {
 
     @Test
     fun testDefaultPathIsConfiguredCorrectly() {
+        // Reset logFilePath back to default for this test since setUp overrides it
+        LogRecorder.logFilePath = "/storage/emulated/0/Android/data/com.aistudio.dialer.app/files/logs/app_logs.txt"
         assertEquals(
-            "/data/data/com.aistudio.dialer.app/files/app_logs.txt",
-            "/data/data/com.aistudio.dialer.app/files/app_logs.txt"
+            "/storage/emulated/0/Android/data/com.aistudio.dialer.app/files/logs/app_logs.txt",
+            LogRecorder.logFilePath
         )
     }
 }
