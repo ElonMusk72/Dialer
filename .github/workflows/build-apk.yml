@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Java 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -89,7 +89,7 @@ jobs:
       - name: Build debug APK
         id: build_step
         run: |
-          gradle :app:assembleDebug --stacktrace --no-daemon --no-configuration-cache
+          ./gradlew :app:assembleDebug --stacktrace --no-daemon --no-configuration-cache
 
       - name: Verify debug APK output
         if: steps.build_step.outcome == 'success'
