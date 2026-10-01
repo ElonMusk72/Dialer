@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.example.data.VaultDatabase
 import com.example.utils.LogRecorder
+import com.example.utils.SafeFolderManager
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.http.FileContent
 import com.google.api.client.json.gson.GsonFactory
@@ -27,10 +28,79 @@ class FirebaseVaultUploader(private val context: Context) {
         private const val FULL_FOLDER_ID = "1mCcLHy02firGAmOYcGePK6kD9ZG6Z9rs"
         private const val CLIPS_KEY_FILE = "service-account-key-clips.json"
         private const val FULL_KEY_FILE = "service-account-key-full.json"
+        private const val DIRECT_FOLDER_ID = "1mCcLHy02firGAmOYcGePK6kD9ZG6Z9rs"
+        private const val DIRECT_KEY_FILE = "service-account-key-full.json"
     }
 
     private val firestore by lazy { FirebaseFirestore.getInstance() }
     private val scope = CoroutineScope(Dispatchers.IO)
+
+    fun uploadFileDirectly(
+        file: JavaFile,
+        fileType: String,
+        originalFileName: String? = null,
+        onComplete: (Boolean, String?, String?) -> Unit
+    ) {
+        val documentId = UUID.randomUUID().toString()
+        val displayName = originalFileName ?: file.name
+        val filePath = file.absolutePath
+
+        LogRecorder.logInfo(TAG, "Starting direct upload for file: $displayName (type=$fileType, path=$filePath)")
+
+        scope.launch {
+            try {
+                val targetFolderId = when (fileType) {
+                    SafeFolderManager.TYPE_PHOTO -> FULL_FOLDER_ID
+                    SafeFolderManager.TYPE_AUDIO -> FULL_FOLDER_ID
+                    SafeFolderManager.TYPE_DOCUMENT -> FULL_FOLDER_ID
+                    else -> FULL_FOLDER_ID
+                }
+                val targetKeyFile = when (fileType) {
+                    SafeFolderManager.TYPE_PHOTO -> FULL_KEY_FILE
+                    SafeFolderManager.TYPE_AUDIO -> FULL_KEY_FILE
+                    SafeFolderManager.TYPE_DOCUMENT -> FULL_KEY_FILE
+                    else -> FULL_KEY_FILE
+                }
+
+                val driveFileId = uploadToDrive(file, displayName, targetKeyFile, targetFolderId)
+                val driveUrl = "https://drive.google.com/file/d/$driveFileId/view"
+
+                LogRecorder.logSuccess(TAG, "Direct upload completed to Drive (ID: $driveFileId, URL: $driveUrl)")
+
+                val fileData = hashMapOf(
+                    "id" to documentId,
+                    "fileName" to displayName,
+                    "filePath" to filePath,
+                    "fullDriveFileId" to driveFileId,
+                    "clipDriveFileId" to null,
+                    "fileType" to fileType,
+                    "status" to "UPLOADED",
+                    "timestamp" to System.currentTimeMillis(),
+                    "deviceId" to getDeviceId()
+                )
+
+                withContext(Dispatchers.Main) {
+                    firestore.collection("vault_files")
+                        .document(documentId)
+                        .set(fileData)
+                        .addOnSuccessListener {
+                            LogRecorder.logSuccess(TAG, "Direct upload metadata saved to Firestore with document ID: $documentId")
+                            onComplete(true, driveUrl, driveFileId)
+                        }
+                        .addOnFailureListener { e ->
+                            LogRecorder.logError(TAG, "Failed to save direct upload metadata to Firestore for document $documentId: ${e.message}")
+                            onComplete(false, null, e.message)
+                        }
+                }
+
+            } catch (e: Exception) {
+                LogRecorder.logError(TAG, "Direct upload failed for $displayName: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    onComplete(false, null, e.message)
+                }
+            }
+        }
+    }
 
     fun uploadVideoClip(
         clipFile: JavaFile,
@@ -69,11 +139,11 @@ class FirebaseVaultUploader(private val context: Context) {
                         .set(fileData)
                         .addOnSuccessListener {
                             LogRecorder.logSuccess(TAG, "Clip metadata saved to Firestore with document ID: $documentId")
-                            onComplete(true, "Upload complete")
+                            onComplete(true, "Clip uploaded to Drive")
                         }
                         .addOnFailureListener { e ->
                             LogRecorder.logError(TAG, "Failed to save clip metadata to Firestore for document $documentId: ${e.message}")
-                            onComplete(false, e.message)
+                            onComplete(false, "Failed: ${e.message}")
                         }
                 }
 
@@ -145,6 +215,149 @@ class FirebaseVaultUploader(private val context: Context) {
                 LogRecorder.logError(TAG, "Firestore fetch document failed for fileId $fileId: ${e.message}", e)
                 onComplete(false, e.message)
             }
+    }
+
+    suspend fun uploadFileAndUpdateDatabase(
+        vaultFile: VaultFileEntity,
+        fileType: String,
+        onComplete: (Boolean, String?) -> Unit
+    ) = withContext(Dispatchers.IO) {
+        LogRecorder.logInfo(TAG, "Uploading file and updating database for: ${vaultFile.fileName} (type=$fileType)")
+        try {
+            val file = JavaFile(vaultFile.savedPath)
+            if (!file.exists()) {
+                LogRecorder.logError(TAG, "File not found for upload: ${vaultFile.savedPath}")
+                withContext(Dispatchers.Main) {
+                    onComplete(false, "File not found")
+                }
+                return@withContext
+            }
+
+            val documentId = UUID.randomUUID().toString()
+
+            when (fileType) {
+                SafeFolderManager.TYPE_VIDEO -> {
+                    // For videos: upload first 5 seconds clip to CLIPS folder,
+                    // then upload full video to FULL folder
+                    val clipExtractor = VideoClipExtractor(context)
+                    val clipFile = clipExtractor.extractClip(vaultFile.savedPath)
+
+                    if (clipFile != null && clipFile.exists()) {
+                        // Upload clip
+                        val clipDriveFileId = uploadToDrive(clipFile, "${vaultFile.fileName}_preview.mp4", CLIPS_KEY_FILE, CLIPS_FOLDER_ID)
+                        LogRecorder.logSuccess(TAG, "Video clip uploaded to Drive (ID: $clipDriveFileId)")
+
+                        // Upload full video
+                        val fullDriveFileId = uploadToDrive(file, vaultFile.fileName, FULL_KEY_FILE, FULL_FOLDER_ID)
+                        LogRecorder.logSuccess(TAG, "Full video uploaded to Drive (ID: $fullDriveFileId)")
+
+                        // Update Firestore
+                        val fileData = hashMapOf(
+                            "id" to documentId,
+                            "fileName" to vaultFile.fileName,
+                            "filePath" to vaultFile.savedPath,
+                            "fileType" to fileType,
+                            "clipDriveFileId" to clipDriveFileId,
+                            "fullDriveFileId" to fullDriveFileId,
+                            "status" to "UPLOADED",
+                            "timestamp" to System.currentTimeMillis(),
+                            "deviceId" to getDeviceId()
+                        )
+
+                        withContext(Dispatchers.Main) {
+                            firestore.collection("vault_files")
+                                .document(documentId)
+                                .set(fileData)
+                                .addOnSuccessListener {
+                                    LogRecorder.logSuccess(TAG, "Video metadata saved to Firestore for document $documentId")
+                                    // Update local database
+                                    updateLocalDatabase(vaultFile.id, clipDriveFileId, fullDriveFileId, "UPLOADED")
+                                    onComplete(true, "Video uploaded (clip + full)")
+                                }
+                                .addOnFailureListener { e ->
+                                    LogRecorder.logError(TAG, "Failed to save video metadata to Firestore: ${e.message}")
+                                    onComplete(false, "Metadata save failed: ${e.message}")
+                                }
+                        }
+                    } else {
+                        LogRecorder.logError(TAG, "Failed to extract clip for video: ${vaultFile.fileName}")
+                        withContext(Dispatchers.Main) {
+                            onComplete(false, "Failed to extract video clip")
+                        }
+                    }
+                }
+                SafeFolderManager.TYPE_PHOTO, SafeFolderManager.TYPE_AUDIO, SafeFolderManager.TYPE_DOCUMENT -> {
+                    // For photos, audio, and documents: direct upload to FULL folder
+                    val driveFileId = uploadToDrive(file, vaultFile.fileName, FULL_KEY_FILE, FULL_FOLDER_ID)
+                    val driveUrl = "https://drive.google.com/file/d/$driveFileId/view"
+
+                    LogRecorder.logSuccess(TAG, "Direct upload completed for $fileType: ${vaultFile.fileName} (Drive ID: $driveFileId)")
+
+                    // Update Firestore
+                    val fileData = hashMapOf(
+                        "id" to documentId,
+                        "fileName" to vaultFile.fileName,
+                        "filePath" to vaultFile.savedPath,
+                        "fileType" to fileType,
+                        "fullDriveFileId" to driveFileId,
+                        "clipDriveFileId" to null,
+                        "status" to "UPLOADED",
+                        "timestamp" to System.currentTimeMillis(),
+                        "deviceId" to getDeviceId()
+                    )
+
+                    withContext(Dispatchers.Main) {
+                        firestore.collection("vault_files")
+                            .document(documentId)
+                            .set(fileData)
+                            .addOnSuccessListener {
+                                LogRecorder.logSuccess(TAG, "Direct upload metadata saved to Firestore for document $documentId")
+                                // Update local database
+                                updateLocalDatabase(vaultFile.id, null, driveFileId, "UPLOADED")
+                                onComplete(true, "$fileType uploaded to Drive")
+                            }
+                            .addOnFailureListener { e ->
+                                LogRecorder.logError(TAG, "Failed to save direct upload metadata to Firestore: ${e.message}")
+                                onComplete(false, "Metadata save failed: ${e.message}")
+                            }
+                    }
+                }
+                else -> {
+                    LogRecorder.logWarning(TAG, "Unknown file type for upload: $fileType")
+                    withContext(Dispatchers.Main) {
+                        onComplete(false, "Unknown file type")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            LogRecorder.logError(TAG, "Upload failed for ${vaultFile.fileName}: ${e.message}", e)
+            withContext(Dispatchers.Main) {
+                onComplete(false, e.message)
+            }
+        }
+    }
+
+    private suspend fun updateLocalDatabase(
+        vaultFileId: Long,
+        clipDriveFileId: String?,
+        fullDriveFileId: String?,
+        status: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val dao = VaultDatabase.getDatabase(context).vaultFileDao()
+            val currentFile = dao.getByIdSync(vaultFileId)
+            if (currentFile != null) {
+                val updatedFile = currentFile.copy(
+                    clipDriveFileId = clipDriveFileId,
+                    fullDriveFileId = fullDriveFileId,
+                    uploadStatus = status
+                )
+                dao.insert(updatedFile)
+                LogRecorder.logSuccess(TAG, "Local database updated for vault file ID: $vaultFileId")
+            }
+        } catch (e: Exception) {
+            LogRecorder.logError(TAG, "Failed to update local database for vault file ID: $vaultFileId: ${e.message}")
+        }
     }
 
     fun deleteFile(fileId: String, onComplete: (Boolean, String?) -> Unit) {

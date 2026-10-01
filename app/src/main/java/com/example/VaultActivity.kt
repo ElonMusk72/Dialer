@@ -333,43 +333,27 @@ class VaultActivity : AppCompatActivity() {
     }
 
     private suspend fun processAndUploadClip(vaultFile: VaultFileEntity) {
-        LogRecorder.logInfo(TAG, "Evaluating clip extraction for file: ${vaultFile.fileName}")
+        LogRecorder.logInfo(TAG, "Processing and uploading file: ${vaultFile.fileName} (type=${vaultFile.fileType})")
         val file = File(vaultFile.savedPath)
         if (!file.exists()) {
-            LogRecorder.logError(TAG, "File not found for clip extraction: ${vaultFile.savedPath}")
+            LogRecorder.logError(TAG, "File not found for upload: ${vaultFile.savedPath}")
             withContext(Dispatchers.Main) {
                 Toast.makeText(this@VaultActivity, "❌ File not found", Toast.LENGTH_SHORT).show()
             }
             return
         }
 
-        if (vaultFile.mimeType.startsWith("video/") || vaultFile.fileType == SafeFolderManager.TYPE_VIDEO) {
-            LogRecorder.logInfo(TAG, "Starting clip extraction for video: ${file.absolutePath}")
-            val clipExtractor = VideoClipExtractor(this@VaultActivity)
-            val clipFile = clipExtractor.extractClip(file.absolutePath)
-
-            if (clipFile == null) {
-                LogRecorder.logError(TAG, "Clip extraction failed for file: ${file.absolutePath}")
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@VaultActivity, "❌ Could not extract clip", Toast.LENGTH_SHORT).show()
-                }
-                return
-            }
-
-            LogRecorder.logInfo(TAG, "Clip extracted at: ${clipFile.absolutePath}, initiating Drive upload")
-            firebaseUploader.uploadVideoClip(
-                clipFile = clipFile,
-                originalFilePath = file.absolutePath,
-                originalFileName = vaultFile.fileName
-            ) { success, message ->
-                lifecycleScope.launch(Dispatchers.Main) {
-                    if (success) {
-                        LogRecorder.logSuccess(TAG, "Clip uploaded to Drive for: ${vaultFile.fileName}")
-                        Toast.makeText(this@VaultActivity, "✅ Clip uploaded to Drive", Toast.LENGTH_SHORT).show()
-                    } else {
-                        LogRecorder.logError(TAG, "Clip upload to Drive failed for ${vaultFile.fileName}: $message")
-                        Toast.makeText(this@VaultActivity, "❌ Failed: $message", Toast.LENGTH_SHORT).show()
-                    }
+        firebaseUploader.uploadFileAndUpdateDatabase(
+            vaultFile = vaultFile,
+            fileType = vaultFile.fileType
+        ) { success, message ->
+            lifecycleScope.launch(Dispatchers.Main) {
+                if (success) {
+                    LogRecorder.logSuccess(TAG, "Upload completed for: ${vaultFile.fileName} (type=${vaultFile.fileType})")
+                    Toast.makeText(this@VaultActivity, "✅ ${message}", Toast.LENGTH_SHORT).show()
+                } else {
+                    LogRecorder.logError(TAG, "Upload failed for ${vaultFile.fileName}: $message")
+                    Toast.makeText(this@VaultActivity, "❌ Failed: $message", Toast.LENGTH_SHORT).show()
                 }
             }
         }
