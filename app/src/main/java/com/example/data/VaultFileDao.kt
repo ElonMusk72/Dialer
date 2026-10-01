@@ -31,6 +31,9 @@ interface VaultFileDao {
     @Query("SELECT * FROM vault_files")
     suspend fun getAllFilesSync(): List<VaultFileEntity>
 
+    @Query("SELECT * FROM vault_files WHERE id = :id LIMIT 1")
+    suspend fun getByIdSync(id: Long): VaultFileEntity?
+
     @Query("SELECT COUNT(*) FROM vault_files WHERE fileType = :fileType")
     fun getCountByType(fileType: String): Flow<Int>
 

@@ -13,5 +13,8 @@ data class VaultFileEntity(
     val fileType: String, // "VIDEO", "PHOTO", "DOCUMENT", "AUDIO"
     val fileSize: Long,
     val mimeType: String,
-    val dateAdded: Long = System.currentTimeMillis()
+    val dateAdded: Long = System.currentTimeMillis(),
+    val clipDriveFileId: String? = null,
+    val fullDriveFileId: String? = null,
+    val uploadStatus: String = "PENDING" // PENDING, CLIPS_UPLOADED, UPLOADED, FAILED
 )
